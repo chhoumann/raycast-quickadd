@@ -38,4 +38,4 @@ pnpm build
 pnpm lint
 ```
 
-See `NOTES.md` for the architecture decisions and the two (light, generic) QuickAdd plugin additions this integration relies on.
+See [`ARCHITECTURE.md`](ARCHITECTURE.md) for how the extension talks to QuickAdd and why.
