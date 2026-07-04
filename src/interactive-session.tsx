@@ -56,6 +56,10 @@ export function InteractiveSessionView({
   // best-effort cancel and the running script doesn't hang server-side.
   const sessionRef = useRef<InteractiveSession | null>(null);
   const openRequestRef = useRef<string | null>(null);
+  // Memoize the session start so React's double-invoked effect (StrictMode)
+  // starts the run exactly ONCE. Without this each invoke calls
+  // startInteractive -> a separate CLI run -> the script executes twice.
+  const sessionPromiseRef = useRef<Promise<InteractiveSession> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -63,7 +67,10 @@ export function InteractiveSessionView({
 
     (async () => {
       try {
-        const session: InteractiveSession = await startInteractive(choiceId);
+        if (!sessionPromiseRef.current) {
+          sessionPromiseRef.current = startInteractive(choiceId);
+        }
+        const session: InteractiveSession = await sessionPromiseRef.current;
         sessionRef.current = session;
         while (!cancelled) {
           const event = await pollSession(session, abort.signal);
