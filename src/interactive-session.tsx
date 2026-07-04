@@ -265,6 +265,8 @@ function PromptView(props: PromptProps) {
   switch (prompt.type) {
     case "suggester":
       return <SuggesterPrompt {...props} prompt={prompt} />;
+    case "multiselect":
+      return <MultiSelectPrompt {...props} prompt={prompt} />;
     case "input":
       return <InputPrompt {...props} prompt={prompt} />;
     case "date":
@@ -510,6 +512,45 @@ function CheckboxPrompt({
           defaultValue={item.checked}
         />
       ))}
+    </Form>
+  );
+}
+
+function MultiSelectPrompt({
+  prompt,
+  choiceName,
+  onAnswer,
+  onCancel,
+}: PromptProps & { prompt: Extract<PromptSpec, { type: "multiselect" }> }) {
+  return (
+    <Form
+      navigationTitle={choiceName}
+      actions={
+        <ActionPanel>
+          <Action.SubmitForm
+            title="Submit"
+            icon={Icon.Check}
+            onSubmit={(values: { selected: string[] }) =>
+              onAnswer(values.selected ?? [])
+            }
+          />
+          <CancelAction onCancel={onCancel} />
+        </ActionPanel>
+      }
+    >
+      <Form.TagPicker
+        id="selected"
+        title={prompt.placeholder ?? "Select values"}
+        defaultValue={prompt.preselected}
+      >
+        {prompt.items.map((item, index) => (
+          <Form.TagPicker.Item
+            key={`${item.value}-${index}`}
+            value={item.value}
+            title={item.title}
+          />
+        ))}
+      </Form.TagPicker>
     </Form>
   );
 }

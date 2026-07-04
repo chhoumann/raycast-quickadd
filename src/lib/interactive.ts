@@ -51,6 +51,13 @@ export type PromptSpec =
       items: SuggesterItem[];
     }
   | {
+      type: "multiselect";
+      placeholder?: string;
+      allowCustomInput: boolean;
+      items: SuggesterItem[];
+      preselected: string[];
+    }
+  | {
       type: "input";
       header: string;
       placeholder?: string;
