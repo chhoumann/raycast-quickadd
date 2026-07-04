@@ -20,7 +20,7 @@ interface Preferences {
 /** Raised for transport-level failures (CLI missing, Obsidian/vault unreachable). */
 export class ObsidianCliError extends Error {}
 
-function resolveCliPath(): string {
+export function resolveCliPath(): string {
   const { cliPath } = getPreferenceValues<Preferences>();
   const candidates = cliPath?.trim() ? [cliPath.trim()] : CLI_CANDIDATES;
   for (const candidate of candidates) {

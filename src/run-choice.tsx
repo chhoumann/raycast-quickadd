@@ -26,6 +26,7 @@ import {
   runChoice,
 } from "./lib/obsidianCli";
 import { choiceIcon, formatDate } from "./lib/format";
+import { InteractiveSessionView } from "./interactive-session";
 import type { ChoiceSummary, FieldRequirement, RunResponse } from "./lib/types";
 
 /** Minimal choice shape needed to run/report - satisfied by list items and check responses. */
@@ -223,6 +224,18 @@ function ChoiceItem({ choice }: { choice: ChoiceSummary }) {
       actions={
         <ActionPanel>
           <Action title="Run" icon={Icon.Play} onAction={runOrCollectInputs} />
+          <Action
+            title="Run Interactively in Raycast"
+            icon={Icon.Wand}
+            onAction={() =>
+              push(
+                <InteractiveSessionView
+                  choiceId={choice.id}
+                  choiceName={choice.name}
+                />,
+              )
+            }
+          />
           <Action
             title="Run Interactively in Obsidian"
             icon={Icon.AppWindow}
