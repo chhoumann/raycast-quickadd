@@ -1,0 +1,77 @@
+{
+  "$schema": "https://www.raycast.com/schemas/extension.json",
+  "name": "quickadd",
+  "title": "QuickAdd for Obsidian",
+  "description": "Run QuickAdd choices, captures, and templates in your Obsidian vault straight from Raycast.",
+  "icon": "icon.png",
+  "author": "christian",
+  "categories": ["Productivity", "Applications"],
+  "license": "MIT",
+  "commands": [
+    {
+      "name": "run-choice",
+      "title": "Run QuickAdd Choice",
+      "description": "Browse and run any QuickAdd choice, filling its inputs in Raycast.",
+      "mode": "view"
+    },
+    {
+      "name": "quick-capture",
+      "title": "Quick Capture",
+      "description": "Capture text to your vault through a QuickAdd capture choice without leaving Raycast.",
+      "mode": "no-view",
+      "arguments": [
+        {
+          "name": "text",
+          "placeholder": "Text to capture",
+          "type": "text",
+          "required": true
+        }
+      ],
+      "preferences": [
+        {
+          "name": "captureChoice",
+          "type": "textfield",
+          "required": true,
+          "default": "💭 Add a Thought",
+          "title": "Capture Choice",
+          "description": "Name of the QuickAdd capture choice to send text to (as shown in Run QuickAdd Choice)."
+        }
+      ]
+    }
+  ],
+  "preferences": [
+    {
+      "name": "vault",
+      "type": "textfield",
+      "required": true,
+      "default": "notes",
+      "title": "Vault Name",
+      "description": "Name of the Obsidian vault QuickAdd runs against (as shown in Obsidian's vault switcher)."
+    },
+    {
+      "name": "cliPath",
+      "type": "textfield",
+      "required": false,
+      "title": "Obsidian CLI Path",
+      "description": "Path to the Obsidian CLI binary. Leave empty to auto-detect.",
+      "placeholder": "/opt/homebrew/bin/obsidian"
+    }
+  ],
+  "dependencies": {
+    "@raycast/api": "^1.104.0",
+    "@raycast/utils": "^2.2.0"
+  },
+  "devDependencies": {
+    "@raycast/eslint-config": "^2.0.4",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.0.0",
+    "eslint": "^9.0.0",
+    "typescript": "^5.8.0"
+  },
+  "scripts": {
+    "dev": "ray develop",
+    "build": "ray build -e dist",
+    "lint": "ray lint",
+    "fix-lint": "ray lint --fix"
+  }
+}
