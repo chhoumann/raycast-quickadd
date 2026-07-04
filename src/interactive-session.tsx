@@ -1,18 +1,20 @@
 import {
   Action,
   ActionPanel,
+  Detail,
+  Form,
   Icon,
   List,
   Toast,
   showToast,
   useNavigation,
-  Keyboard,
 } from "@raycast/api";
 import { showFailureToast } from "@raycast/utils";
 import { useEffect, useRef, useState } from "react";
 import {
   type InteractiveSession,
   type PromptSpec,
+  type ReplyValue,
   pollSession,
   replyToPrompt,
   startInteractive,
@@ -22,6 +24,8 @@ interface PendingPrompt {
   requestId: string;
   prompt: PromptSpec;
 }
+
+type Answer = { cancelled: true } | { cancelled: false; value: ReplyValue };
 
 type Phase =
   | { state: "connecting" }
@@ -34,7 +38,8 @@ type Phase =
  * Drives a QuickAdd interactive run: opens the session once, then runs a single
  * continuous poll loop that renders each runtime prompt as a native control,
  * parks until the user answers, sends the answer back, and resumes - until the
- * run completes. Currently handles `suggester` prompts (rendered as a List).
+ * run completes. Covers the full prompt seam (suggester / input / date / confirm
+ * / checkbox / info).
  */
 export function InteractiveSessionView({
   choiceId,
@@ -45,8 +50,11 @@ export function InteractiveSessionView({
 }) {
   const { pop } = useNavigation();
   const [phase, setPhase] = useState<Phase>({ state: "connecting" });
-  // Resolves the loop's "wait for the user's answer" promise. null = no prompt open.
-  const answerRef = useRef<((value: string | null) => void) | null>(null);
+  const answerRef = useRef<((answer: Answer) => void) | null>(null);
+  // Live session + the prompt we're parked on, so unmount (Escape) can send a
+  // best-effort cancel and the running script doesn't hang server-side.
+  const sessionRef = useRef<InteractiveSession | null>(null);
+  const openRequestRef = useRef<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -55,25 +63,29 @@ export function InteractiveSessionView({
     (async () => {
       try {
         const session: InteractiveSession = await startInteractive(choiceId);
+        sessionRef.current = session;
         while (!cancelled) {
           const event = await pollSession(session, abort.signal);
           if (cancelled) return;
           if (event.kind === "idle") continue;
           if (event.kind === "prompt") {
+            openRequestRef.current = event.requestId;
             setPhase({
               state: "prompt",
               pending: { requestId: event.requestId, prompt: event.prompt },
             });
-            const value = await new Promise<string | null>((resolve) => {
+            const answer = await new Promise<Answer>((resolve) => {
               answerRef.current = resolve;
             });
             answerRef.current = null;
             if (cancelled) return;
-            await replyToPrompt(session, event.requestId, value);
-            if (value === null) {
+            openRequestRef.current = null;
+            if (answer.cancelled) {
+              await replyToPrompt(session, event.requestId, null, true);
               setPhase({ state: "done", message: "Cancelled" });
               return;
             }
+            await replyToPrompt(session, event.requestId, answer.value);
             setPhase({ state: "working" });
           } else if (event.kind === "done") {
             setPhase({ state: "done", message: `${choiceName} finished` });
@@ -96,13 +108,19 @@ export function InteractiveSessionView({
     return () => {
       cancelled = true;
       abort.abort();
-      // Unblock a parked prompt so the loop can exit cleanly.
-      answerRef.current?.(null);
+      answerRef.current?.({ cancelled: true });
       answerRef.current = null;
+      // Best-effort cancel so the script's prompt doesn't park forever if the
+      // user dismissed the view while a prompt was open.
+      const session = sessionRef.current;
+      const requestId = openRequestRef.current;
+      if (session && requestId) {
+        openRequestRef.current = null;
+        void replyToPrompt(session, requestId, null, true).catch(() => {});
+      }
     };
   }, [choiceId, choiceName]);
 
-  // Report terminal states and pop back to the list.
   useEffect(() => {
     if (phase.state === "done") {
       showToast({ style: Toast.Style.Success, title: phase.message });
@@ -114,15 +132,18 @@ export function InteractiveSessionView({
         title: `${choiceName} failed`,
       });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase.state]);
 
   if (phase.state === "prompt") {
+    const onAnswer = (value: ReplyValue) =>
+      answerRef.current?.({ cancelled: false, value });
+    const onCancel = () => answerRef.current?.({ cancelled: true });
     return (
-      <SuggesterPrompt
+      <PromptView
         pending={phase.pending}
         choiceName={choiceName}
-        onAnswer={(v) => answerRef.current?.(v)}
+        onAnswer={onAnswer}
+        onCancel={onCancel}
       />
     );
   }
@@ -155,16 +176,49 @@ export function InteractiveSessionView({
   );
 }
 
-function SuggesterPrompt({
-  pending,
-  choiceName,
-  onAnswer,
-}: {
+interface PromptProps {
   pending: PendingPrompt;
   choiceName: string;
-  onAnswer: (value: string | null) => void;
-}) {
-  const { prompt } = pending;
+  onAnswer: (value: ReplyValue) => void;
+  onCancel: () => void;
+}
+
+function PromptView(props: PromptProps) {
+  const { prompt } = props.pending;
+  switch (prompt.type) {
+    case "suggester":
+      return <SuggesterPrompt {...props} prompt={prompt} />;
+    case "input":
+      return <InputPrompt {...props} prompt={prompt} />;
+    case "date":
+      return <DatePrompt {...props} prompt={prompt} />;
+    case "confirm":
+      return <ConfirmPrompt {...props} prompt={prompt} />;
+    case "checkbox":
+      return <CheckboxPrompt {...props} prompt={prompt} />;
+    case "info":
+      return <InfoPrompt {...props} prompt={prompt} />;
+  }
+}
+
+function CancelAction({ onCancel }: { onCancel: () => void }) {
+  return (
+    <Action
+      title="Cancel Run"
+      icon={Icon.XMarkCircle}
+      style={Action.Style.Destructive}
+      shortcut={{ modifiers: ["cmd", "shift"], key: "backspace" }}
+      onAction={onCancel}
+    />
+  );
+}
+
+function SuggesterPrompt({
+  prompt,
+  choiceName,
+  onAnswer,
+  onCancel,
+}: PromptProps & { prompt: Extract<PromptSpec, { type: "suggester" }> }) {
   const [search, setSearch] = useState("");
   const trimmed = search.trim();
   const canUseCustom =
@@ -192,7 +246,7 @@ function SuggesterPrompt({
                 icon={Icon.Plus}
                 onAction={() => onAnswer(trimmed)}
               />
-              <CancelAction onAnswer={onAnswer} />
+              <CancelAction onCancel={onCancel} />
             </ActionPanel>
           }
         />
@@ -210,7 +264,7 @@ function SuggesterPrompt({
                   icon={Icon.Check}
                   onAction={() => onAnswer(item.value)}
                 />
-                <CancelAction onAnswer={onAnswer} />
+                <CancelAction onCancel={onCancel} />
               </ActionPanel>
             }
           />
@@ -220,18 +274,184 @@ function SuggesterPrompt({
   );
 }
 
-function CancelAction({
+function InputPrompt({
+  prompt,
+  choiceName,
   onAnswer,
-}: {
-  onAnswer: (value: string | null) => void;
-}) {
+  onCancel,
+}: PromptProps & { prompt: Extract<PromptSpec, { type: "input" }> }) {
   return (
-    <Action
-      title="Cancel Run"
-      icon={Icon.XMarkCircle}
-      style={Action.Style.Destructive}
-      shortcut={Keyboard.Shortcut.Common.Pin}
-      onAction={() => onAnswer(null)}
+    <Form
+      navigationTitle={choiceName}
+      actions={
+        <ActionPanel>
+          <Action.SubmitForm
+            title="Submit"
+            icon={Icon.Check}
+            onSubmit={(values: { text: string }) => onAnswer(values.text ?? "")}
+          />
+          <CancelAction onCancel={onCancel} />
+        </ActionPanel>
+      }
+    >
+      {prompt.multiline ? (
+        <Form.TextArea
+          id="text"
+          title={prompt.header}
+          placeholder={prompt.placeholder}
+          defaultValue={prompt.defaultValue}
+        />
+      ) : (
+        <Form.TextField
+          id="text"
+          title={prompt.header}
+          placeholder={prompt.placeholder}
+          defaultValue={prompt.defaultValue}
+        />
+      )}
+    </Form>
+  );
+}
+
+function DatePrompt({
+  prompt,
+  choiceName,
+  onAnswer,
+  onCancel,
+}: PromptProps & { prompt: Extract<PromptSpec, { type: "date" }> }) {
+  const parsed = prompt.defaultValue
+    ? new Date(prompt.defaultValue)
+    : undefined;
+  const defaultValue =
+    parsed && !Number.isNaN(parsed.getTime()) ? parsed : undefined;
+  return (
+    <Form
+      navigationTitle={choiceName}
+      actions={
+        <ActionPanel>
+          <Action.SubmitForm
+            title="Submit"
+            icon={Icon.Check}
+            onSubmit={(values: { date: Date | null }) =>
+              onAnswer((values.date ?? new Date()).toISOString())
+            }
+          />
+          <CancelAction onCancel={onCancel} />
+        </ActionPanel>
+      }
+    >
+      <Form.DatePicker
+        id="date"
+        title={prompt.header}
+        defaultValue={defaultValue}
+        type={Form.DatePicker.Type.Date}
+      />
+    </Form>
+  );
+}
+
+function ConfirmPrompt({
+  prompt,
+  choiceName,
+  onAnswer,
+  onCancel,
+}: PromptProps & { prompt: Extract<PromptSpec, { type: "confirm" }> }) {
+  return (
+    <List navigationTitle={choiceName} searchBarPlaceholder={prompt.header}>
+      <List.Section title={prompt.header} subtitle={prompt.text}>
+        <List.Item
+          icon={Icon.CheckCircle}
+          title="Yes"
+          actions={
+            <ActionPanel>
+              <Action
+                title="Yes"
+                icon={Icon.CheckCircle}
+                onAction={() => onAnswer(true)}
+              />
+              <CancelAction onCancel={onCancel} />
+            </ActionPanel>
+          }
+        />
+        <List.Item
+          icon={Icon.Circle}
+          title="No"
+          actions={
+            <ActionPanel>
+              <Action
+                title="No"
+                icon={Icon.Circle}
+                onAction={() => onAnswer(false)}
+              />
+              <CancelAction onCancel={onCancel} />
+            </ActionPanel>
+          }
+        />
+      </List.Section>
+    </List>
+  );
+}
+
+function CheckboxPrompt({
+  prompt,
+  choiceName,
+  onAnswer,
+  onCancel,
+}: PromptProps & { prompt: Extract<PromptSpec, { type: "checkbox" }> }) {
+  return (
+    <Form
+      navigationTitle={choiceName}
+      actions={
+        <ActionPanel>
+          <Action.SubmitForm
+            title="Submit"
+            icon={Icon.Check}
+            onSubmit={(values: Record<string, boolean>) =>
+              onAnswer(
+                prompt.items
+                  .filter((item, index) => values[`item-${index}`])
+                  .map((item) => item.value),
+              )
+            }
+          />
+          <CancelAction onCancel={onCancel} />
+        </ActionPanel>
+      }
+    >
+      {prompt.header ? <Form.Description text={prompt.header} /> : null}
+      {prompt.items.map((item, index) => (
+        <Form.Checkbox
+          key={`${item.value}-${index}`}
+          id={`item-${index}`}
+          label={item.title}
+          defaultValue={item.checked}
+        />
+      ))}
+    </Form>
+  );
+}
+
+function InfoPrompt({
+  prompt,
+  choiceName,
+  onAnswer,
+  onCancel,
+}: PromptProps & { prompt: Extract<PromptSpec, { type: "info" }> }) {
+  const markdown = `# ${prompt.header}\n\n${prompt.text.join("\n\n")}`;
+  return (
+    <Detail
+      navigationTitle={choiceName}
+      markdown={markdown}
+      actions={
+        <ActionPanel>
+          <Action
+            title="Continue"
+            icon={Icon.ArrowRight}
+            onAction={() => onAnswer(true)}
+          />
+          <CancelAction onCancel={onCancel} />
+        </ActionPanel>
+      }
     />
   );
 }

@@ -14,12 +14,38 @@ export interface SuggesterItem {
   value: string;
 }
 
-export type PromptSpec = {
-  type: "suggester";
-  placeholder?: string;
-  allowCustomInput: boolean;
-  items: SuggesterItem[];
-};
+export interface CheckboxItem {
+  title: string;
+  value: string;
+  checked: boolean;
+}
+
+export type PromptSpec =
+  | {
+      type: "suggester";
+      placeholder?: string;
+      allowCustomInput: boolean;
+      items: SuggesterItem[];
+    }
+  | {
+      type: "input";
+      header: string;
+      placeholder?: string;
+      defaultValue?: string;
+      multiline: boolean;
+    }
+  | {
+      type: "date";
+      header: string;
+      placeholder?: string;
+      defaultValue?: string;
+      dateFormat?: string;
+    }
+  | { type: "confirm"; header: string; text?: string }
+  | { type: "checkbox"; header?: string; items: CheckboxItem[] }
+  | { type: "info"; header: string; text: string[] };
+
+export type ReplyValue = string | string[] | boolean | null;
 
 export type SessionEvent =
   | { kind: "prompt"; requestId: string; prompt: PromptSpec }
@@ -113,17 +139,18 @@ export async function pollSession(
   return (await res.json()) as SessionEvent;
 }
 
-/** Answer a prompt (or cancel it, which aborts the run). */
+/** Answer a prompt with its type-appropriate value, or cancel it (aborts the run). */
 export async function replyToPrompt(
   s: InteractiveSession,
   requestId: string,
-  value: string | null,
+  value: ReplyValue,
+  cancelled = false,
 ): Promise<void> {
   await fetch(`${baseUrl(s)}/reply?${authQuery(s)}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(
-      value === null ? { requestId, cancelled: true } : { requestId, value },
+      cancelled ? { requestId, cancelled: true } : { requestId, value },
     ),
   });
 }
