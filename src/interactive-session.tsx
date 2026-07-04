@@ -354,7 +354,11 @@ function DatePrompt({
         id="date"
         title={prompt.header}
         defaultValue={defaultValue}
-        type={Form.DatePicker.Type.Date}
+        type={
+          prompt.withTime
+            ? Form.DatePicker.Type.DateTime
+            : Form.DatePicker.Type.Date
+        }
       />
     </Form>
   );
@@ -526,7 +530,11 @@ function FormFieldControl({ field }: { field: FormField }) {
         title={title}
         info={field.description}
         defaultValue={defaultValue}
-        type={Form.DatePicker.Type.Date}
+        type={
+          field.withTime
+            ? Form.DatePicker.Type.DateTime
+            : Form.DatePicker.Type.Date
+        }
       />
     );
   }

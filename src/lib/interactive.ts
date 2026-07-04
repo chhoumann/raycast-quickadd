@@ -37,6 +37,7 @@ export interface FormField {
   description?: string;
   options?: string[];
   dateFormat?: string;
+  withTime?: boolean;
   optional?: boolean;
   numericConfig?: { min?: number; max?: number; step?: number };
   suggesterConfig?: { allowCustomInput?: boolean; multiSelect?: boolean };
@@ -62,6 +63,7 @@ export type PromptSpec =
       placeholder?: string;
       defaultValue?: string;
       dateFormat?: string;
+      withTime?: boolean;
     }
   | { type: "confirm"; header: string; text?: string }
   | { type: "checkbox"; header?: string; items: CheckboxItem[] }
