@@ -32,9 +32,9 @@
           "name": "captureChoice",
           "type": "textfield",
           "required": true,
-          "default": "💭 Add a Thought",
           "title": "Capture Choice",
-          "description": "Name of the QuickAdd capture choice to send text to (as shown in Run QuickAdd Choice)."
+          "placeholder": "e.g. Quick Capture",
+          "description": "Name of the QuickAdd capture choice to send text to (as shown in Run QuickAdd Choice). Pick one that runs without prompts."
         }
       ]
     }
@@ -44,8 +44,8 @@
       "name": "vault",
       "type": "textfield",
       "required": true,
-      "default": "notes",
       "title": "Vault Name",
+      "placeholder": "My Vault",
       "description": "Name of the Obsidian vault QuickAdd runs against (as shown in Obsidian's vault switcher)."
     },
     {
