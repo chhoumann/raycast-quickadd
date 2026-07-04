@@ -20,6 +20,28 @@ export interface CheckboxItem {
   checked: boolean;
 }
 
+export interface FormField {
+  id: string;
+  label: string;
+  type:
+    | "text"
+    | "number"
+    | "textarea"
+    | "dropdown"
+    | "date"
+    | "suggester"
+    | "slider"
+    | "field-suggest";
+  placeholder?: string;
+  defaultValue?: string;
+  description?: string;
+  options?: string[];
+  dateFormat?: string;
+  optional?: boolean;
+  numericConfig?: { min?: number; max?: number; step?: number };
+  suggesterConfig?: { allowCustomInput?: boolean; multiSelect?: boolean };
+}
+
 export type PromptSpec =
   | {
       type: "suggester";
@@ -43,9 +65,11 @@ export type PromptSpec =
     }
   | { type: "confirm"; header: string; text?: string }
   | { type: "checkbox"; header?: string; items: CheckboxItem[] }
-  | { type: "info"; header: string; text: string[] };
+  | { type: "info"; header: string; text: string[] }
+  | { type: "form"; fields: FormField[] };
 
-export type ReplyValue = string | string[] | boolean | null;
+export type ReplyValue =
+  string | string[] | boolean | Record<string, string> | null;
 
 export type SessionEvent =
   | { kind: "prompt"; requestId: string; prompt: PromptSpec }

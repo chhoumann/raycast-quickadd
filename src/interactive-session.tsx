@@ -12,6 +12,7 @@ import {
 import { showFailureToast } from "@raycast/utils";
 import { useEffect, useRef, useState } from "react";
 import {
+  type FormField,
   type InteractiveSession,
   type PromptSpec,
   type ReplyValue,
@@ -198,6 +199,8 @@ function PromptView(props: PromptProps) {
       return <CheckboxPrompt {...props} prompt={prompt} />;
     case "info":
       return <InfoPrompt {...props} prompt={prompt} />;
+    case "form":
+      return <FormPrompt {...props} prompt={prompt} />;
   }
 }
 
@@ -452,6 +455,123 @@ function InfoPrompt({
           <CancelAction onCancel={onCancel} />
         </ActionPanel>
       }
+    />
+  );
+}
+
+function FormPrompt({
+  prompt,
+  choiceName,
+  onAnswer,
+  onCancel,
+}: PromptProps & { prompt: Extract<PromptSpec, { type: "form" }> }) {
+  function handleSubmit(values: Record<string, unknown>) {
+    const result: Record<string, string> = {};
+    for (const field of prompt.fields) {
+      const raw = values[field.id];
+      if (raw instanceof Date) {
+        // Match the one-page modal: date fields carry a raw @date:ISO the plugin
+        // then formats with the field's dateFormat.
+        result[field.id] = `@date:${raw.toISOString()}`;
+      } else if (Array.isArray(raw)) {
+        result[field.id] = raw.join(", ");
+      } else {
+        result[field.id] = raw == null ? "" : String(raw);
+      }
+    }
+    onAnswer(result);
+  }
+
+  return (
+    <Form
+      navigationTitle={choiceName}
+      actions={
+        <ActionPanel>
+          <Action.SubmitForm
+            title="Submit"
+            icon={Icon.Check}
+            onSubmit={handleSubmit}
+          />
+          <CancelAction onCancel={onCancel} />
+        </ActionPanel>
+      }
+    >
+      {prompt.fields.map((field) => (
+        <FormFieldControl key={field.id} field={field} />
+      ))}
+    </Form>
+  );
+}
+
+function FormFieldControl({ field }: { field: FormField }) {
+  const title = field.optional ? `${field.label} (Optional)` : field.label;
+  const hasOptions = Array.isArray(field.options) && field.options.length > 0;
+
+  if (field.type === "date") {
+    const parsed = field.defaultValue
+      ? new Date(field.defaultValue)
+      : undefined;
+    const defaultValue =
+      parsed && !Number.isNaN(parsed.getTime()) ? parsed : undefined;
+    return (
+      <Form.DatePicker
+        id={field.id}
+        title={title}
+        info={field.description}
+        defaultValue={defaultValue}
+        type={Form.DatePicker.Type.Date}
+      />
+    );
+  }
+
+  if (hasOptions) {
+    const options = field.options ?? [];
+    const defaultValue =
+      field.defaultValue && options.includes(field.defaultValue)
+        ? field.defaultValue
+        : undefined;
+    return (
+      <Form.Dropdown
+        id={field.id}
+        title={title}
+        info={field.description}
+        defaultValue={defaultValue}
+      >
+        {options.map((option, index) => (
+          <Form.Dropdown.Item
+            key={`${option}-${index}`}
+            value={option}
+            title={option}
+          />
+        ))}
+      </Form.Dropdown>
+    );
+  }
+
+  if (field.type === "textarea") {
+    return (
+      <Form.TextArea
+        id={field.id}
+        title={title}
+        info={field.description}
+        placeholder={field.placeholder}
+        defaultValue={field.defaultValue}
+      />
+    );
+  }
+
+  return (
+    <Form.TextField
+      id={field.id}
+      title={title}
+      info={field.description}
+      placeholder={
+        field.placeholder ??
+        (field.type === "number" || field.type === "slider"
+          ? "Number"
+          : undefined)
+      }
+      defaultValue={field.defaultValue}
     />
   );
 }
