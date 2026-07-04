@@ -15,9 +15,12 @@ Choices that need a genuinely interactive picker mid-run (heading choosers, mult
 
 ## Commands
 
-- **Run QuickAdd Choice** - browse every runnable choice, fill its inputs, run it.
+- **Run QuickAdd Choice** - browse every runnable choice, fill its inputs, run it. Choices that Obsidian flags as commands are marked, and any choice can be **pinned as a Quicklink** (⌘K → Pin as Quicklink) so it becomes root-searchable and hotkey-able in Raycast.
 - **Quick Capture** - a no-view command that sends its text argument to a capture choice of your choosing (set per-command in preferences). Bind it to a hotkey for frictionless capture.
-- **Brain Dump** - opens a large multi-line field (autofocused, dictation-friendly) and, on submit, runs a QuickAdd choice with the text as `{{value}}`. Pair it with a macro that AI-names the dump and files it - e.g. a note in an inbox folder plus a link in your daily journal.
+
+### Multi-line input, driven by the vault
+
+The form renders each input from the choice's own requirement metadata. To get a large, dictation-friendly text area, declare the value as multi-line in QuickAdd itself - `{{VALUE:label|type:multiline}}`, or a macro user script whose `quickadd.inputs` entry uses `type: "textarea"`. The extension renders whatever the vault describes; there is no bespoke "big field" command to maintain.
 
 ## Requirements
 
@@ -29,7 +32,6 @@ Choices that need a genuinely interactive picker mid-run (heading choosers, mult
 - **Vault Name** - the vault QuickAdd runs against (as shown in Obsidian's vault switcher).
 - **Obsidian CLI Path** - optional; auto-detected at `/opt/homebrew/bin/obsidian`, `/usr/local/bin/obsidian`, or inside `Obsidian.app`.
 - **Quick Capture → Capture Choice** - the capture choice text is sent to. Pick one that works headlessly (a capture whose target file/heading exists, or that creates them).
-- **Brain Dump → Brain Dump Choice** - the choice that receives the dumped text as `{{value}}`. A macro that names and files the note works well here.
 
 ## Development
 
