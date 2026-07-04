@@ -18,7 +18,7 @@ import {
   showFailureToast,
   useCachedPromise,
 } from "@raycast/utils";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   checkChoice,
   listChoices,
@@ -26,8 +26,15 @@ import {
   runChoice,
 } from "./lib/obsidianCli";
 import { choiceIcon, formatDate } from "./lib/format";
-import { InteractiveSessionView } from "./interactive-session";
-import { pollSession, startInteractive } from "./lib/interactive";
+import {
+  InteractiveSessionView,
+  type PendingPrompt,
+} from "./interactive-session";
+import {
+  type InteractiveSession,
+  pollSession,
+  startInteractive,
+} from "./lib/interactive";
 import type { ChoiceSummary, FieldRequirement, RunResponse } from "./lib/types";
 
 /** Minimal choice shape needed to run/report - satisfied by list items and check responses. */
@@ -89,60 +96,124 @@ function ChoiceList() {
 }
 
 /**
- * Opens one choice directly (used when launched from a pinned Quicklink): shows a
- * form to collect its inputs, or runs it immediately when it needs none.
+ * Opens one choice directly (used when launched from a pinned Quicklink). Runs it
+ * interactively like the list "Run": a prompt-less run just closes with a HUD; a
+ * run that raises a prompt hands off to the interactive session view.
  */
 function DirectChoice({ choiceId }: { choiceId: string }) {
-  const { data, isLoading, error } = useCachedPromise(
-    async (id: string) => {
-      const check = await checkChoice(id);
-      if (check.error || !check.choice) {
-        throw new Error(check.error ?? "Choice not found");
+  const [view, setView] = useState<
+    | { phase: "loading" }
+    | {
+        phase: "attach";
+        session: InteractiveSession;
+        choiceName: string;
+        initialPrompt: PendingPrompt;
       }
-      return { choice: check.choice, missing: check.missing ?? [] };
-    },
-    [choiceId],
-  );
-
-  const noInputs = !!data && data.missing.length === 0;
+    | { phase: "error"; message: string }
+  >({ phase: "loading" });
+  // Memoize so React's double-invoked effect (StrictMode) resolves the choice
+  // name and starts the run exactly once (not twice).
+  const prepRef = useRef<Promise<{
+    session: InteractiveSession;
+    choiceName: string;
+  }> | null>(null);
 
   useEffect(() => {
-    if (!noInputs || !data) return;
+    let cancelled = false;
+    const abort = new AbortController();
+
     (async () => {
       try {
-        const result = await runChoice(data.choice.id);
-        if (!result.ok) {
-          throw new Error(result.error ?? "Choice execution failed");
+        if (!prepRef.current) {
+          prepRef.current = (async () => {
+            const check = await checkChoice(choiceId);
+            if (check.error || !check.choice) {
+              throw new Error(check.error ?? "Choice not found");
+            }
+            return {
+              session: await startInteractive(choiceId),
+              choiceName: check.choice.name,
+            };
+          })();
         }
-        await showHUD(
-          result.file
-            ? `Ran ${data.choice.name} → ${result.file}`
-            : `Ran ${data.choice.name}`,
-        );
-        await closeMainWindow();
+        const { session, choiceName } = await prepRef.current;
+        if (cancelled) return;
+
+        // Pre-poll until the run either raises a prompt or finishes.
+        while (!cancelled) {
+          const event = await pollSession(session, abort.signal);
+          if (cancelled) return;
+          if (event.kind === "idle") continue;
+          if (event.kind === "prompt") {
+            setView({
+              phase: "attach",
+              session,
+              choiceName,
+              initialPrompt: {
+                requestId: event.requestId,
+                prompt: event.prompt,
+              },
+            });
+            return;
+          }
+          if (event.kind === "done") {
+            const result = (event.result ?? {}) as {
+              ok?: boolean;
+              error?: string;
+              file?: string;
+            };
+            if (result.ok === false) {
+              throw new Error(result.error ?? "Choice execution failed");
+            }
+            await showHUD(
+              result.file
+                ? `Ran ${choiceName} → ${result.file}`
+                : `Ran ${choiceName}`,
+            );
+            await closeMainWindow();
+            return;
+          }
+          if (event.kind === "error") {
+            throw new Error(event.error);
+          }
+        }
       } catch (e) {
-        await showFailureToast(e, {
-          title: `Could not run ${data.choice.name}`,
-        });
+        if (!cancelled) {
+          const message = e instanceof Error ? e.message : String(e);
+          setView({ phase: "error", message });
+          await showFailureToast(e, { title: "Could not run choice" });
+        }
       }
     })();
-  }, [noInputs, data]);
 
-  if (error) {
+    return () => {
+      cancelled = true;
+      abort.abort();
+    };
+  }, [choiceId]);
+
+  if (view.phase === "attach") {
+    return (
+      <InteractiveSessionView
+        session={view.session}
+        choiceName={view.choiceName}
+        initialPrompt={view.initialPrompt}
+        onFinish={() => void closeMainWindow()}
+      />
+    );
+  }
+  if (view.phase === "error") {
     return (
       <List>
         <List.EmptyView
           icon={Icon.ExclamationMark}
           title="Could not open choice"
-          description={error.message}
+          description={view.message}
         />
       </List>
     );
   }
-  if (data && data.missing.length > 0) {
-    return <ChoiceForm choice={data.choice} requirements={data.missing} />;
-  }
-  return <Form isLoading={isLoading || noInputs} />;
+  return <Form isLoading />;
 }
 
 /** Group runnable choices by their Multi folder path (root-level first). */

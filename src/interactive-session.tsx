@@ -48,6 +48,7 @@ export function InteractiveSessionView({
   choiceName,
   session: attachedSession,
   initialPrompt,
+  onFinish,
 }: {
   choiceName: string;
   /** Start a fresh run for this choice (omit when attaching to a live session). */
@@ -56,6 +57,8 @@ export function InteractiveSessionView({
   session?: InteractiveSession;
   /** A prompt already received during hand-off, rendered immediately on mount. */
   initialPrompt?: PendingPrompt;
+  /** Called on a successful finish instead of popping (e.g. a Quicklink root closes the window). */
+  onFinish?: () => void;
 }) {
   const { pop } = useNavigation();
   const [phase, setPhase] = useState<Phase>(
@@ -201,7 +204,7 @@ export function InteractiveSessionView({
   useEffect(() => {
     if (phase.state === "done") {
       showToast({ style: Toast.Style.Success, title: phase.message });
-      const timer = setTimeout(pop, 400);
+      const timer = setTimeout(onFinish ?? pop, 400);
       return () => clearTimeout(timer);
     }
     if (phase.state === "failed") {
