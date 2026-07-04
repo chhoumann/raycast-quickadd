@@ -3,15 +3,22 @@ import {
   ActionPanel,
   Form,
   Icon,
+  type LaunchProps,
   List,
   Toast,
+  closeMainWindow,
   open,
   popToRoot,
+  showHUD,
   showToast,
   useNavigation,
 } from "@raycast/api";
-import { showFailureToast, useCachedPromise } from "@raycast/utils";
-import { useState } from "react";
+import {
+  createDeeplink,
+  showFailureToast,
+  useCachedPromise,
+} from "@raycast/utils";
+import { useEffect, useState } from "react";
 import {
   checkChoice,
   listChoices,
@@ -21,7 +28,26 @@ import {
 import { choiceIcon, formatDate } from "./lib/format";
 import type { ChoiceSummary, FieldRequirement, RunResponse } from "./lib/types";
 
-export default function RunChoiceCommand() {
+/** Minimal choice shape needed to run/report - satisfied by list items and check responses. */
+type RunnableChoice = { id: string; name: string };
+
+interface RunChoiceContext {
+  /** Set when launched from a pinned Quicklink: open this choice directly. */
+  choiceId?: string;
+}
+
+export default function RunChoiceCommand(props: LaunchProps) {
+  const choiceId = (props.launchContext as RunChoiceContext | undefined)
+    ?.choiceId;
+  return choiceId ? <DirectChoice choiceId={choiceId} /> : <ChoiceList />;
+}
+
+/** A deeplink back into this command that opens one specific choice (used for pinning). */
+function choiceDeeplink(choiceId: string): string {
+  return createDeeplink({ command: "run-choice", context: { choiceId } });
+}
+
+function ChoiceList() {
   const { data, isLoading, error } = useCachedPromise(async () => {
     const response = await listChoices();
     if (!response.ok || !response.choices) {
@@ -58,6 +84,63 @@ export default function RunChoiceCommand() {
       ))}
     </List>
   );
+}
+
+/**
+ * Opens one choice directly (used when launched from a pinned Quicklink): shows a
+ * form to collect its inputs, or runs it immediately when it needs none.
+ */
+function DirectChoice({ choiceId }: { choiceId: string }) {
+  const { data, isLoading, error } = useCachedPromise(
+    async (id: string) => {
+      const check = await checkChoice(id);
+      if (check.error || !check.choice) {
+        throw new Error(check.error ?? "Choice not found");
+      }
+      return { choice: check.choice, missing: check.missing ?? [] };
+    },
+    [choiceId],
+  );
+
+  const noInputs = !!data && data.missing.length === 0;
+
+  useEffect(() => {
+    if (!noInputs || !data) return;
+    (async () => {
+      try {
+        const result = await runChoice(data.choice.id);
+        if (!result.ok) {
+          throw new Error(result.error ?? "Choice execution failed");
+        }
+        await showHUD(
+          result.file
+            ? `Ran ${data.choice.name} → ${result.file}`
+            : `Ran ${data.choice.name}`,
+        );
+        await closeMainWindow();
+      } catch (e) {
+        await showFailureToast(e, {
+          title: `Could not run ${data.choice.name}`,
+        });
+      }
+    })();
+  }, [noInputs, data]);
+
+  if (error) {
+    return (
+      <List>
+        <List.EmptyView
+          icon={Icon.ExclamationMark}
+          title="Could not open choice"
+          description={error.message}
+        />
+      </List>
+    );
+  }
+  if (data && data.missing.length > 0) {
+    return <ChoiceForm choice={data.choice} requirements={data.missing} />;
+  }
+  return <Form isLoading={isLoading || noInputs} />;
 }
 
 /** Group runnable choices by their Multi folder path (root-level first). */
@@ -122,11 +205,20 @@ function ChoiceItem({ choice }: { choice: ChoiceSummary }) {
     }
   }
 
+  const accessories: List.Item.Accessory[] = [];
+  if (choice.command) {
+    accessories.push({
+      icon: Icon.Bolt,
+      tooltip: "Marked as a command in QuickAdd - pin it as a Quicklink",
+    });
+  }
+  accessories.push({ tag: choice.type });
+
   return (
     <List.Item
       icon={choiceIcon(choice.type)}
       title={choice.name}
-      accessories={[{ tag: choice.type }]}
+      accessories={accessories}
       keywords={choice.path.split(" / ")}
       actions={
         <ActionPanel>
@@ -136,6 +228,16 @@ function ChoiceItem({ choice }: { choice: ChoiceSummary }) {
             icon={Icon.AppWindow}
             onAction={runInObsidian}
           />
+          <Action.CreateQuicklink
+            title="Pin as Quicklink"
+            icon={Icon.Pin}
+            quicklink={{ name: choice.name, link: choiceDeeplink(choice.id) }}
+          />
+          <Action.CopyToClipboard
+            title="Copy Deeplink"
+            icon={Icon.Link}
+            content={choiceDeeplink(choice.id)}
+          />
         </ActionPanel>
       }
     />
@@ -144,7 +246,7 @@ function ChoiceItem({ choice }: { choice: ChoiceSummary }) {
 
 async function reportRunResult(
   toast: Toast,
-  choice: ChoiceSummary,
+  choice: RunnableChoice,
   result: RunResponse,
 ) {
   if (!result.ok) {
@@ -192,7 +294,7 @@ function ChoiceForm({
   choice,
   requirements,
 }: {
-  choice: ChoiceSummary;
+  choice: RunnableChoice;
   requirements: FieldRequirement[];
 }) {
   const [isRunning, setIsRunning] = useState(false);

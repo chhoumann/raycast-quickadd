@@ -37,22 +37,6 @@
           "description": "Name of the QuickAdd capture choice to send text to (as shown in Run QuickAdd Choice). Pick one that runs without prompts."
         }
       ]
-    },
-    {
-      "name": "brain-dump",
-      "title": "Brain Dump",
-      "description": "Open a large field to braindump (or dictate) freely, then run a QuickAdd choice that files it in your vault.",
-      "mode": "view",
-      "preferences": [
-        {
-          "name": "brainDumpChoice",
-          "type": "textfield",
-          "required": true,
-          "title": "Brain Dump Choice",
-          "placeholder": "e.g. Brain Dump",
-          "description": "Name of the QuickAdd choice that receives the dump (as shown in Run QuickAdd Choice). Its {{value}} is the dumped text."
-        }
-      ]
     }
   ],
   "preferences": [
