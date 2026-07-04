@@ -17,6 +17,7 @@ Choices that need a genuinely interactive picker mid-run (heading choosers, mult
 
 - **Run QuickAdd Choice** - browse every runnable choice, fill its inputs, run it.
 - **Quick Capture** - a no-view command that sends its text argument to a capture choice of your choosing (set per-command in preferences). Bind it to a hotkey for frictionless capture.
+- **Brain Dump** - opens a large multi-line field (autofocused, dictation-friendly) and, on submit, runs a QuickAdd choice with the text as `{{value}}`. Pair it with a macro that AI-names the dump and files it - e.g. a note in an inbox folder plus a link in your daily journal.
 
 ## Requirements
 
@@ -28,6 +29,7 @@ Choices that need a genuinely interactive picker mid-run (heading choosers, mult
 - **Vault Name** - the vault QuickAdd runs against (as shown in Obsidian's vault switcher).
 - **Obsidian CLI Path** - optional; auto-detected at `/opt/homebrew/bin/obsidian`, `/usr/local/bin/obsidian`, or inside `Obsidian.app`.
 - **Quick Capture → Capture Choice** - the capture choice text is sent to. Pick one that works headlessly (a capture whose target file/heading exists, or that creates them).
+- **Brain Dump → Brain Dump Choice** - the choice that receives the dumped text as `{{value}}`. A macro that names and files the note works well here.
 
 ## Development
 
