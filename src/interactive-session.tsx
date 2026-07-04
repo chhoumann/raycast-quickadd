@@ -56,6 +56,9 @@ export function InteractiveSessionView({
   // best-effort cancel and the running script doesn't hang server-side.
   const sessionRef = useRef<InteractiveSession | null>(null);
   const openRequestRef = useRef<string | null>(null);
+  // Set when the user cancels a prompt, so the server's resulting abort event is
+  // rendered as a clean "Cancelled" rather than a failure.
+  const userCancelledRef = useRef(false);
   // Memoize the session start so React's double-invoked effect (StrictMode)
   // starts the run exactly ONCE. Without this each invoke calls
   // startInteractive -> a separate CLI run -> the script executes twice.
@@ -72,6 +75,40 @@ export function InteractiveSessionView({
         }
         const session: InteractiveSession = await sessionPromiseRef.current;
         sessionRef.current = session;
+
+        // Send the user's answer WITHOUT pausing the poll loop below. Continuous
+        // polling is the server's only liveness signal: if we stopped polling
+        // while a prompt was open, the server couldn't tell a slow user from a
+        // crashed client, and a disconnect would hang the run. So the loop keeps
+        // polling (parking on idle) while this runs in the background.
+        const answerPrompt = async (requestId: string) => {
+          const answer = await new Promise<Answer>((resolve) => {
+            answerRef.current = resolve;
+          });
+          answerRef.current = null;
+          if (cancelled) return;
+          openRequestRef.current = null;
+          // Set the next visible phase synchronously (before the reply round-trip)
+          // so it never races ahead of the loop's terminal event.
+          if (answer.cancelled) userCancelledRef.current = true;
+          else setPhase({ state: "working" });
+          try {
+            await replyToPrompt(
+              session,
+              requestId,
+              answer.cancelled ? null : answer.value,
+              answer.cancelled,
+            );
+          } catch (error) {
+            if (!cancelled) {
+              setPhase({
+                state: "failed",
+                message: error instanceof Error ? error.message : String(error),
+              });
+            }
+          }
+        };
+
         while (!cancelled) {
           const event = await pollSession(session, abort.signal);
           if (cancelled) return;
@@ -82,24 +119,21 @@ export function InteractiveSessionView({
               state: "prompt",
               pending: { requestId: event.requestId, prompt: event.prompt },
             });
-            const answer = await new Promise<Answer>((resolve) => {
-              answerRef.current = resolve;
-            });
-            answerRef.current = null;
-            if (cancelled) return;
-            openRequestRef.current = null;
-            if (answer.cancelled) {
-              await replyToPrompt(session, event.requestId, null, true);
-              setPhase({ state: "done", message: "Cancelled" });
-              return;
-            }
-            await replyToPrompt(session, event.requestId, answer.value);
-            setPhase({ state: "working" });
-          } else if (event.kind === "done") {
+            void answerPrompt(event.requestId);
+            continue;
+          }
+          if (event.kind === "done") {
             setPhase({ state: "done", message: `${choiceName} finished` });
             return;
-          } else if (event.kind === "error") {
-            setPhase({ state: "failed", message: event.error });
+          }
+          if (event.kind === "error") {
+            // A user cancel aborts the run server-side; render it as a clean
+            // cancellation instead of a failure.
+            if (userCancelledRef.current) {
+              setPhase({ state: "done", message: "Cancelled" });
+            } else {
+              setPhase({ state: "failed", message: event.error });
+            }
             return;
           }
         }
