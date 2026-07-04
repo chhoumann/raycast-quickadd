@@ -27,6 +27,7 @@ import {
 } from "./lib/obsidianCli";
 import { choiceIcon, formatDate } from "./lib/format";
 import { InteractiveSessionView } from "./interactive-session";
+import { pollSession, startInteractive } from "./lib/interactive";
 import type { ChoiceSummary, FieldRequirement, RunResponse } from "./lib/types";
 
 /** Minimal choice shape needed to run/report - satisfied by list items and check responses. */
@@ -165,6 +166,48 @@ function groupByParent(
 function ChoiceItem({ choice }: { choice: ChoiceSummary }) {
   const { push } = useNavigation();
 
+  // Default run: drive the choice interactively, but stay on the list until a
+  // prompt actually appears. We pre-poll here and only open the session view
+  // once the run raises a prompt; a prompt-less run just reports via a toast.
+  async function runInteractive() {
+    const toast = await showToast({
+      style: Toast.Style.Animated,
+      title: `Running ${choice.name}...`,
+    });
+    try {
+      const session = await startInteractive(choice.id);
+      const abort = new AbortController();
+      while (true) {
+        const event = await pollSession(session, abort.signal);
+        if (event.kind === "idle") continue;
+        if (event.kind === "prompt") {
+          await toast.hide();
+          push(
+            <InteractiveSessionView
+              session={session}
+              choiceName={choice.name}
+              initialPrompt={{
+                requestId: event.requestId,
+                prompt: event.prompt,
+              }}
+            />,
+          );
+          return;
+        }
+        if (event.kind === "done") {
+          await reportInteractiveDone(toast, choice, event.result);
+          return;
+        }
+        if (event.kind === "error") {
+          throw new Error(event.error);
+        }
+      }
+    } catch (error) {
+      await toast.hide();
+      await showFailureToast(error, { title: `Could not run ${choice.name}` });
+    }
+  }
+
   async function runOrCollectInputs() {
     const toast = await showToast({
       style: Toast.Style.Animated,
@@ -223,21 +266,14 @@ function ChoiceItem({ choice }: { choice: ChoiceSummary }) {
       keywords={choice.path.split(" / ")}
       actions={
         <ActionPanel>
-          <Action title="Run" icon={Icon.Play} onAction={runOrCollectInputs} />
+          <Action title="Run" icon={Icon.Play} onAction={runInteractive} />
           <Action
-            title="Run Interactively in Raycast"
-            icon={Icon.Wand}
-            onAction={() =>
-              push(
-                <InteractiveSessionView
-                  choiceId={choice.id}
-                  choiceName={choice.name}
-                />,
-              )
-            }
+            title="Run in Background"
+            icon={Icon.Forward}
+            onAction={runOrCollectInputs}
           />
           <Action
-            title="Run Interactively in Obsidian"
+            title="Run in Obsidian"
             icon={Icon.AppWindow}
             onAction={runInObsidian}
           />
@@ -255,6 +291,28 @@ function ChoiceItem({ choice }: { choice: ChoiceSummary }) {
       }
     />
   );
+}
+
+/** Report a prompt-less interactive run's `done` event (we never left the list). */
+async function reportInteractiveDone(
+  toast: Toast,
+  choice: RunnableChoice,
+  result: unknown,
+) {
+  const r = (result ?? {}) as { ok?: boolean; error?: string; file?: string };
+  if (r.ok === false) {
+    throw new Error(r.error ?? "Choice execution failed");
+  }
+  toast.style = Toast.Style.Success;
+  toast.title = `Ran ${choice.name}`;
+  if (r.file) {
+    const file = r.file;
+    toast.message = file;
+    toast.primaryAction = {
+      title: "Open in Obsidian",
+      onAction: () => open(obsidianOpenUrl(file)),
+    };
+  }
 }
 
 async function reportRunResult(

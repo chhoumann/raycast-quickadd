@@ -16,12 +16,13 @@ import {
   type InteractiveSession,
   type PromptSpec,
   type ReplyValue,
+  type SessionEvent,
   pollSession,
   replyToPrompt,
   startInteractive,
 } from "./lib/interactive";
 
-interface PendingPrompt {
+export interface PendingPrompt {
   requestId: string;
   prompt: PromptSpec;
 }
@@ -45,12 +46,23 @@ type Phase =
 export function InteractiveSessionView({
   choiceId,
   choiceName,
+  session: attachedSession,
+  initialPrompt,
 }: {
-  choiceId: string;
   choiceName: string;
+  /** Start a fresh run for this choice (omit when attaching to a live session). */
+  choiceId?: string;
+  /** Attach to an already-started run instead of starting a new one. */
+  session?: InteractiveSession;
+  /** A prompt already received during hand-off, rendered immediately on mount. */
+  initialPrompt?: PendingPrompt;
 }) {
   const { pop } = useNavigation();
-  const [phase, setPhase] = useState<Phase>({ state: "connecting" });
+  const [phase, setPhase] = useState<Phase>(
+    initialPrompt
+      ? { state: "prompt", pending: initialPrompt }
+      : { state: "connecting" },
+  );
   const answerRef = useRef<((answer: Answer) => void) | null>(null);
   // Live session + the prompt we're parked on, so unmount (Escape) can send a
   // best-effort cancel and the running script doesn't hang server-side.
@@ -70,10 +82,17 @@ export function InteractiveSessionView({
 
     (async () => {
       try {
-        if (!sessionPromiseRef.current) {
-          sessionPromiseRef.current = startInteractive(choiceId);
+        let session: InteractiveSession;
+        if (attachedSession) {
+          // Handed a live session by the caller (default "Run" pre-polls and only
+          // opens this view once a prompt actually appears).
+          session = attachedSession;
+        } else {
+          if (!sessionPromiseRef.current) {
+            sessionPromiseRef.current = startInteractive(choiceId as string);
+          }
+          session = await sessionPromiseRef.current;
         }
-        const session: InteractiveSession = await sessionPromiseRef.current;
         sessionRef.current = session;
 
         // Send the user's answer WITHOUT pausing the poll loop below. Continuous
@@ -109,8 +128,24 @@ export function InteractiveSessionView({
           }
         };
 
+        // Replay a prompt already consumed during hand-off, then poll for the
+        // rest. It is processed only AFTER the await below, so a StrictMode
+        // transient unmount (which sets `cancelled`) is observed first and the
+        // discarded first mount never touches openRequestRef / cancels it.
+        let seeded: PendingPrompt | null = initialPrompt ?? null;
         while (!cancelled) {
-          const event = await pollSession(session, abort.signal);
+          let event: SessionEvent;
+          if (seeded) {
+            event = {
+              kind: "prompt",
+              requestId: seeded.requestId,
+              prompt: seeded.prompt,
+            };
+            seeded = null;
+            await Promise.resolve();
+          } else {
+            event = await pollSession(session, abort.signal);
+          }
           if (cancelled) return;
           if (event.kind === "idle") continue;
           if (event.kind === "prompt") {
