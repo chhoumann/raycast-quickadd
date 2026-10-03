@@ -2,7 +2,7 @@ import { getPreferenceValues } from "@raycast/api";
 import { execFile } from "node:child_process";
 import { accessSync, constants } from "node:fs";
 import { promisify } from "node:util";
-import type { CheckResponse, ListResponse, RunResponse } from "./types";
+import type { ListResponse, RunResponse } from "./types";
 
 const execFileAsync = promisify(execFile);
 
@@ -97,20 +97,6 @@ async function invoke<T extends { ok: boolean }>(
 
 export async function listChoices(): Promise<ListResponse> {
   return invoke<ListResponse>("quickadd:list", {});
-}
-
-export async function checkChoice(
-  choiceId: string,
-  vars?: Record<string, unknown>,
-): Promise<CheckResponse> {
-  return invoke<CheckResponse>("quickadd:check", {
-    id: choiceId,
-    // Request full field metadata (options, widget config). QuickAdd versions
-    // without the flag ignore it and return the compact summary.
-    fields: "",
-    vars:
-      vars && Object.keys(vars).length > 0 ? JSON.stringify(vars) : undefined,
-  });
 }
 
 export interface RunOptions {

@@ -19,13 +19,8 @@ import {
   useCachedPromise,
 } from "@raycast/utils";
 import { useEffect, useRef, useState } from "react";
-import {
-  checkChoice,
-  listChoices,
-  obsidianOpenUrl,
-  runChoice,
-} from "./lib/obsidianCli";
-import { choiceIcon, formatDate } from "./lib/format";
+import { listChoices, obsidianOpenUrl, runChoice } from "./lib/obsidianCli";
+import { choiceIcon } from "./lib/format";
 import {
   InteractiveSessionView,
   type PendingPrompt,
@@ -35,9 +30,8 @@ import {
   pollSession,
   startInteractive,
 } from "./lib/interactive";
-import type { ChoiceSummary, FieldRequirement, RunResponse } from "./lib/types";
+import type { ChoiceSummary, RunResponse } from "./lib/types";
 
-/** Minimal choice shape needed to run/report - satisfied by list items and check responses. */
 type RunnableChoice = { id: string; name: string };
 
 interface RunChoiceContext {
@@ -111,12 +105,9 @@ function DirectChoice({ choiceId }: { choiceId: string }) {
       }
     | { phase: "error"; message: string }
   >({ phase: "loading" });
-  // Memoize so React's double-invoked effect (StrictMode) resolves the choice
-  // name and starts the run exactly once (not twice).
-  const prepRef = useRef<Promise<{
-    session: InteractiveSession;
-    choiceName: string;
-  }> | null>(null);
+  // Raycast double-invokes effects (StrictMode); without the ref the choice
+  // runs twice.
+  const startRef = useRef<ReturnType<typeof startInteractive> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -124,19 +115,9 @@ function DirectChoice({ choiceId }: { choiceId: string }) {
 
     (async () => {
       try {
-        if (!prepRef.current) {
-          prepRef.current = (async () => {
-            const check = await checkChoice(choiceId);
-            if (check.error || !check.choice) {
-              throw new Error(check.error ?? "Choice not found");
-            }
-            return {
-              session: await startInteractive(choiceId),
-              choiceName: check.choice.name,
-            };
-          })();
-        }
-        const { session, choiceName } = await prepRef.current;
+        startRef.current ??= startInteractive(choiceId);
+        const { session, choice } = await startRef.current;
+        const choiceName = choice.name;
         if (cancelled) return;
 
         // Pre-poll until the run either raises a prompt or finishes.
@@ -246,7 +227,7 @@ function ChoiceItem({ choice }: { choice: ChoiceSummary }) {
       title: `Running ${choice.name}...`,
     });
     try {
-      const session = await startInteractive(choice.id);
+      const { session } = await startInteractive(choice.id);
       const abort = new AbortController();
       while (true) {
         const event = await pollSession(session, abort.signal);
@@ -273,31 +254,6 @@ function ChoiceItem({ choice }: { choice: ChoiceSummary }) {
           throw new Error(event.error);
         }
       }
-    } catch (error) {
-      await toast.hide();
-      await showFailureToast(error, { title: `Could not run ${choice.name}` });
-    }
-  }
-
-  async function runOrCollectInputs() {
-    const toast = await showToast({
-      style: Toast.Style.Animated,
-      title: "Checking inputs...",
-    });
-    try {
-      const check = await checkChoice(choice.id);
-      if (check.error) throw new Error(check.error);
-
-      const missing = check.missing ?? [];
-      if (missing.length > 0) {
-        await toast.hide();
-        push(<ChoiceForm choice={choice} requirements={missing} />);
-        return;
-      }
-
-      toast.title = `Running ${choice.name}...`;
-      const result = await runChoice(choice.id);
-      await reportRunResult(toast, choice, result);
     } catch (error) {
       await toast.hide();
       await showFailureToast(error, { title: `Could not run ${choice.name}` });
@@ -338,11 +294,6 @@ function ChoiceItem({ choice }: { choice: ChoiceSummary }) {
       actions={
         <ActionPanel>
           <Action title="Run" icon={Icon.Play} onAction={runInteractive} />
-          <Action
-            title="Run in Background"
-            icon={Icon.Forward}
-            onAction={runOrCollectInputs}
-          />
           <Action
             title="Run in Obsidian"
             icon={Icon.AppWindow}
@@ -405,279 +356,4 @@ async function reportRunResult(
     };
   }
   await popToRoot();
-}
-
-/**
- * Form item ids are positional ("field-0"), not requirement ids: QuickAdd
- * requirement ids can contain characters (e.g. the unit-separator in anonymous
- * option-list ids) that make poor DOM/form identifiers. Submit maps them back.
- */
-function fieldId(index: number): string {
-  return `field-${index}`;
-}
-
-function customFieldId(index: number): string {
-  return `field-${index}-custom`;
-}
-
-function isMultiSelect(requirement: FieldRequirement): boolean {
-  return requirement.suggesterConfig?.multiSelect === true;
-}
-
-function allowsCustomInput(requirement: FieldRequirement): boolean {
-  return requirement.suggesterConfig?.allowCustomInput === true;
-}
-
-function hasOptionList(requirement: FieldRequirement): boolean {
-  return Array.isArray(requirement.options) && requirement.options.length > 0;
-}
-
-/**
- * Like QuickAdd's one-page form, a single-note picker (the Capture to target or
- * a {{FILE:...}} field) starts with no pick unless a value is provided, so an
- * untouched submit never picks the first note for the user.
- */
-function isSingleNotePicker(requirement: FieldRequirement): boolean {
-  return requirement.type === "file-picker" && !isMultiSelect(requirement);
-}
-
-function ChoiceForm({
-  choice,
-  requirements,
-}: {
-  choice: RunnableChoice;
-  requirements: FieldRequirement[];
-}) {
-  const [isRunning, setIsRunning] = useState(false);
-
-  async function handleSubmit(values: Record<string, unknown>) {
-    const vars: Record<string, unknown> = {};
-    for (const [index, requirement] of requirements.entries()) {
-      const value = toVariableValue(requirement, values, index);
-      if (value === undefined) {
-        await showToast({
-          style: Toast.Style.Failure,
-          title: `${requirement.label} is required`,
-        });
-        return;
-      }
-      vars[requirement.id] = value;
-    }
-
-    setIsRunning(true);
-    const toast = await showToast({
-      style: Toast.Style.Animated,
-      title: `Running ${choice.name}...`,
-    });
-    try {
-      const result = await runChoice(choice.id, { vars });
-      await reportRunResult(toast, choice, result);
-    } catch (error) {
-      await toast.hide();
-      await showFailureToast(error, { title: `Could not run ${choice.name}` });
-    } finally {
-      setIsRunning(false);
-    }
-  }
-
-  return (
-    <Form
-      isLoading={isRunning}
-      navigationTitle={choice.name}
-      actions={
-        <ActionPanel>
-          <Action.SubmitForm
-            title={`Run ${choice.name}`}
-            icon={Icon.Play}
-            onSubmit={handleSubmit}
-          />
-        </ActionPanel>
-      }
-    >
-      {requirements.map((requirement, index) => (
-        <RequirementField
-          key={fieldId(index)}
-          requirement={requirement}
-          index={index}
-        />
-      ))}
-    </Form>
-  );
-}
-
-/**
- * Convert a submitted form value into what QuickAdd expects in the executor's
- * variables map. Returns undefined when a required field is empty.
- *
- * Multi-select values stay arrays: the plugin's formatter stores arrays for
- * |multi variables (wiki-linked when multiEmit is "linklist") and the YAML
- * property collector needs the real list.
- */
-function toVariableValue(
-  requirement: FieldRequirement,
-  values: Record<string, unknown>,
-  index: number,
-): unknown {
-  const raw = values[fieldId(index)];
-
-  if (isMultiSelect(requirement)) {
-    const picked = Array.isArray(raw) ? raw.map(String) : [];
-    if (picked.length === 0 && !requirement.optional) return undefined;
-    return requirement.multiEmit === "linklist"
-      ? picked.map((value) => `[[${value}]]`)
-      : picked;
-  }
-
-  // A filled-in custom value wins over the dropdown selection.
-  const custom = values[customFieldId(index)];
-  if (typeof custom === "string" && custom.trim().length > 0) {
-    return custom;
-  }
-
-  if (raw instanceof Date) {
-    return formatDate(raw, requirement.dateFormat, requirement.withTime);
-  }
-  if (typeof raw === "boolean") {
-    return raw ? "true" : "false";
-  }
-
-  const text = raw == null ? "" : String(raw);
-  if (text.trim().length === 0 && !requirement.optional) {
-    // Only free-form fields and note pickers can be empty; other dropdowns
-    // always have a selection.
-    if (!hasOptionList(requirement) || isSingleNotePicker(requirement)) {
-      return undefined;
-    }
-  }
-  return text;
-}
-
-function RequirementField({
-  requirement,
-  index,
-}: {
-  requirement: FieldRequirement;
-  index: number;
-}) {
-  const id = fieldId(index);
-  const title = requirement.optional
-    ? `${requirement.label} (Optional)`
-    : requirement.label;
-  const info = requirement.description;
-
-  if (requirement.type === "date") {
-    const defaultDate = requirement.defaultValue
-      ? new Date(requirement.defaultValue)
-      : new Date();
-    return (
-      <Form.DatePicker
-        id={id}
-        title={title}
-        info={info}
-        defaultValue={
-          Number.isNaN(defaultDate.getTime()) ? new Date() : defaultDate
-        }
-        type={
-          requirement.withTime
-            ? Form.DatePicker.Type.DateTime
-            : Form.DatePicker.Type.Date
-        }
-      />
-    );
-  }
-
-  if (isMultiSelect(requirement) && hasOptionList(requirement)) {
-    const options = requirement.options ?? [];
-    const labels = requirement.displayOptions ?? options;
-    return (
-      <Form.TagPicker id={id} title={title} info={info}>
-        {options.map((value, optionIndex) => (
-          <Form.TagPicker.Item
-            key={`${value}-${optionIndex}`}
-            value={value}
-            title={labels[optionIndex] ?? value}
-          />
-        ))}
-      </Form.TagPicker>
-    );
-  }
-
-  if (hasOptionList(requirement)) {
-    const options = requirement.options ?? [];
-    const labels = requirement.displayOptions ?? options;
-    const defaultValue =
-      requirement.defaultValue && options.includes(requirement.defaultValue)
-        ? requirement.defaultValue
-        : undefined;
-    return (
-      <>
-        <Form.Dropdown
-          id={id}
-          title={title}
-          info={info}
-          defaultValue={defaultValue}
-        >
-          {isSingleNotePicker(requirement) && (
-            <Form.Dropdown.Item
-              value=""
-              title={requirement.optional ? "None" : "Select..."}
-            />
-          )}
-          {options.map((value, optionIndex) => (
-            <Form.Dropdown.Item
-              key={`${value}-${optionIndex}`}
-              value={value}
-              title={labels[optionIndex] ?? value}
-            />
-          ))}
-        </Form.Dropdown>
-        {allowsCustomInput(requirement) && (
-          <Form.TextField
-            id={customFieldId(index)}
-            title={`${requirement.label} (Custom)`}
-            placeholder="Overrides the selection above"
-          />
-        )}
-      </>
-    );
-  }
-
-  if (requirement.type === "textarea") {
-    return (
-      <Form.TextArea
-        id={id}
-        title={title}
-        info={info}
-        placeholder={requirement.placeholder}
-        defaultValue={requirement.defaultValue}
-      />
-    );
-  }
-
-  const numericHint = requirement.numericConfig
-    ? [
-        "Number",
-        requirement.numericConfig.min !== undefined &&
-          `min ${requirement.numericConfig.min}`,
-        requirement.numericConfig.max !== undefined &&
-          `max ${requirement.numericConfig.max}`,
-      ]
-        .filter(Boolean)
-        .join(", ")
-    : undefined;
-
-  return (
-    <Form.TextField
-      id={id}
-      title={title}
-      info={info}
-      placeholder={
-        requirement.placeholder ??
-        (requirement.type === "number" || requirement.type === "slider"
-          ? (numericHint ?? "Number")
-          : undefined)
-      }
-      defaultValue={requirement.defaultValue}
-    />
-  );
 }

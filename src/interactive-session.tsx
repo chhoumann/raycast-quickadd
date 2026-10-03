@@ -25,7 +25,6 @@ import {
   type SessionEvent,
   pollSession,
   replyToPrompt,
-  startInteractive,
 } from "./lib/interactive";
 
 export interface PendingPrompt {
@@ -36,54 +35,33 @@ export interface PendingPrompt {
 type Answer = { cancelled: true } | { cancelled: false; value: ReplyValue };
 
 type Phase =
-  | { state: "connecting" }
   | { state: "prompt"; pending: PendingPrompt }
   | { state: "working" }
   | { state: "done"; message: string }
   | { state: "failed"; message: string };
 
-/**
- * Drives a QuickAdd interactive run: opens the session once, then runs a single
- * continuous poll loop that renders each runtime prompt as a native control,
- * parks until the user answers, sends the answer back, and resumes - until the
- * run completes. Covers the full prompt seam (suggester / input / date / confirm
- * / checkbox / info).
- */
 export function InteractiveSessionView({
-  choiceId,
   choiceName,
-  session: attachedSession,
+  session,
   initialPrompt,
   onFinish,
 }: {
   choiceName: string;
-  /** Start a fresh run for this choice (omit when attaching to a live session). */
-  choiceId?: string;
-  /** Attach to an already-started run instead of starting a new one. */
-  session?: InteractiveSession;
-  /** A prompt already received during hand-off, rendered immediately on mount. */
-  initialPrompt?: PendingPrompt;
+  session: InteractiveSession;
+  initialPrompt: PendingPrompt;
   /** Called on a successful finish instead of popping (e.g. a Quicklink root closes the window). */
   onFinish?: () => void;
 }) {
   const { pop } = useNavigation();
-  const [phase, setPhase] = useState<Phase>(
-    initialPrompt
-      ? { state: "prompt", pending: initialPrompt }
-      : { state: "connecting" },
-  );
+  const [phase, setPhase] = useState<Phase>({
+    state: "prompt",
+    pending: initialPrompt,
+  });
   const answerRef = useRef<((answer: Answer) => void) | null>(null);
-  // Live session + the prompt we're parked on, so unmount (Escape) can send a
-  // best-effort cancel and the running script doesn't hang server-side.
-  const sessionRef = useRef<InteractiveSession | null>(null);
   const openRequestRef = useRef<string | null>(null);
   // Set when the user cancels a prompt, so the server's resulting abort event is
   // rendered as a clean "Cancelled" rather than a failure.
   const userCancelledRef = useRef(false);
-  // Memoize the session start so React's double-invoked effect (StrictMode)
-  // starts the run exactly ONCE. Without this each invoke calls
-  // startInteractive -> a separate CLI run -> the script executes twice.
-  const sessionPromiseRef = useRef<Promise<InteractiveSession> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -91,19 +69,6 @@ export function InteractiveSessionView({
 
     (async () => {
       try {
-        let session: InteractiveSession;
-        if (attachedSession) {
-          // Handed a live session by the caller (default "Run" pre-polls and only
-          // opens this view once a prompt actually appears).
-          session = attachedSession;
-        } else {
-          if (!sessionPromiseRef.current) {
-            sessionPromiseRef.current = startInteractive(choiceId as string);
-          }
-          session = await sessionPromiseRef.current;
-        }
-        sessionRef.current = session;
-
         // Send the user's answer WITHOUT pausing the poll loop below. Continuous
         // polling is the server's only liveness signal: if we stopped polling
         // while a prompt was open, the server couldn't tell a slow user from a
@@ -141,7 +106,7 @@ export function InteractiveSessionView({
         // rest. It is processed only AFTER the await below, so a StrictMode
         // transient unmount (which sets `cancelled`) is observed first and the
         // discarded first mount never touches openRequestRef / cancels it.
-        let seeded: PendingPrompt | null = initialPrompt ?? null;
+        let seeded: PendingPrompt | null = initialPrompt;
         while (!cancelled) {
           let event: SessionEvent;
           if (seeded) {
@@ -198,14 +163,13 @@ export function InteractiveSessionView({
       answerRef.current = null;
       // Best-effort cancel so the script's prompt doesn't park forever if the
       // user dismissed the view while a prompt was open.
-      const session = sessionRef.current;
       const requestId = openRequestRef.current;
-      if (session && requestId) {
+      if (requestId) {
         openRequestRef.current = null;
         void replyToPrompt(session, requestId, null, true).catch(() => {});
       }
     };
-  }, [choiceId, choiceName]);
+  }, [session, choiceName]);
 
   useEffect(() => {
     if (phase.state === "done") {
@@ -235,23 +199,20 @@ export function InteractiveSessionView({
     );
   }
 
-  const isBusy = phase.state === "connecting" || phase.state === "working";
   return (
     <List
-      isLoading={isBusy}
+      isLoading={phase.state === "working"}
       navigationTitle={choiceName}
       searchBarPlaceholder={`Running ${choiceName}...`}
     >
       <List.EmptyView
         icon={phase.state === "failed" ? Icon.ExclamationMark : Icon.Wand}
         title={
-          phase.state === "connecting"
-            ? "Starting interactive run..."
-            : phase.state === "working"
-              ? "Working..."
-              : phase.state === "failed"
-                ? "Run failed"
-                : "Done"
+          phase.state === "working"
+            ? "Working..."
+            : phase.state === "failed"
+              ? "Run failed"
+              : "Done"
         }
         description={
           phase.state === "failed"
