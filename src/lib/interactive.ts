@@ -39,7 +39,6 @@ export interface FormField {
   /** Labels shown for `options` (e.g. note names for note paths). */
   displayOptions?: string[];
   dateFormat?: string;
-  withTime?: boolean;
   optional?: boolean;
   numericConfig?: { min?: number; max?: number; step?: number };
   suggesterConfig?: { allowCustomInput?: boolean; multiSelect?: boolean };
@@ -82,7 +81,7 @@ export type PromptSpec =
   | { type: "form"; fields: FormField[] };
 
 export type ReplyValue =
-  string | string[] | boolean | Record<string, string> | null;
+  string | string[] | boolean | Record<string, string | string[]> | null;
 
 export type SessionEvent =
   | { kind: "prompt"; requestId: string; prompt: PromptSpec }
