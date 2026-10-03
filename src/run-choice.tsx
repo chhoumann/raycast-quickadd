@@ -432,6 +432,15 @@ function hasOptionList(requirement: FieldRequirement): boolean {
   return Array.isArray(requirement.options) && requirement.options.length > 0;
 }
 
+/**
+ * Like QuickAdd's one-page form, a single-note picker (the Capture to target or
+ * a {{FILE:...}} field) starts with no pick unless a value is provided, so an
+ * untouched submit never picks the first note for the user.
+ */
+function isSingleNotePicker(requirement: FieldRequirement): boolean {
+  return requirement.type === "file-picker" && !isMultiSelect(requirement);
+}
+
 function ChoiceForm({
   choice,
   requirements,
@@ -534,8 +543,11 @@ function toVariableValue(
 
   const text = raw == null ? "" : String(raw);
   if (text.trim().length === 0 && !requirement.optional) {
-    // Dropdowns always have a selection; only free-form fields can be empty.
-    if (!hasOptionList(requirement)) return undefined;
+    // Only free-form fields and note pickers can be empty; other dropdowns
+    // always have a selection.
+    if (!hasOptionList(requirement) || isSingleNotePicker(requirement)) {
+      return undefined;
+    }
   }
   return text;
 }
@@ -605,6 +617,12 @@ function RequirementField({
           info={info}
           defaultValue={defaultValue}
         >
+          {isSingleNotePicker(requirement) && (
+            <Form.Dropdown.Item
+              value=""
+              title={requirement.optional ? "None" : "Select..."}
+            />
+          )}
           {options.map((value, optionIndex) => (
             <Form.Dropdown.Item
               key={`${value}-${optionIndex}`}

@@ -497,7 +497,7 @@ function CheckboxPrompt({
             onSubmit={(values: Record<string, boolean>) =>
               onAnswer(
                 prompt.items
-                  .filter((item, index) => values[`item-${index}`])
+                  .filter((_item, index) => values[`item-${index}`])
                   .map((item) => item.value),
               )
             }
@@ -589,10 +589,26 @@ function FormPrompt({
   onAnswer,
   onCancel,
 }: PromptProps & { prompt: Extract<PromptSpec, { type: "form" }> }) {
+  const [unpickedIndex, setUnpickedIndex] = useState<number>();
+
   function handleSubmit(values: Record<string, unknown>) {
+    const unpicked = prompt.fields.findIndex(
+      (field, index) =>
+        isSingleNotePicker(field) &&
+        !field.optional &&
+        !values[formItemId(index)],
+    );
+    if (unpicked !== -1) {
+      setUnpickedIndex(unpicked);
+      void showToast({
+        style: Toast.Style.Failure,
+        title: `${prompt.fields[unpicked].label} is required`,
+      });
+      return;
+    }
     const result: Record<string, string> = {};
-    for (const field of prompt.fields) {
-      const raw = values[field.id];
+    for (const [index, field] of prompt.fields.entries()) {
+      const raw = values[formItemId(index)];
       if (raw instanceof Date) {
         // Match the one-page modal: date fields carry a raw @date:ISO the plugin
         // then formats with the field's dateFormat.
@@ -620,14 +636,59 @@ function FormPrompt({
         </ActionPanel>
       }
     >
-      {prompt.fields.map((field) => (
-        <FormFieldControl key={field.id} field={field} />
+      {prompt.fields.map((field, index) => (
+        <FormFieldControl
+          key={formItemId(index)}
+          id={formItemId(index)}
+          field={field}
+          error={index === unpickedIndex ? "Required" : undefined}
+          onChange={() =>
+            setUnpickedIndex((current) =>
+              current === index ? undefined : current,
+            )
+          }
+        />
       ))}
     </Form>
   );
 }
 
-function FormFieldControl({ field }: { field: FormField }) {
+/**
+ * Form item ids are positional: QuickAdd field ids such as a {{FILE:...}}
+ * token's contain characters that stop Raycast from submitting the form.
+ */
+function formItemId(index: number): string {
+  return `field-${index}`;
+}
+
+/**
+ * A single-note picker (the Capture to target or a {{FILE:...}} field). Like
+ * QuickAdd's own one-page form, it starts with no pick unless the field
+ * provides a value, so an untouched submit never picks the first note for the
+ * user. QuickAdd before 2.31.0 doesn't mark note pickers, so their fields keep
+ * the first option picked.
+ */
+function isSingleNotePicker(field: FormField): boolean {
+  return (
+    field.type === "suggester" &&
+    field.picker === "file" &&
+    !field.suggesterConfig?.multiSelect &&
+    Array.isArray(field.options) &&
+    field.options.length > 0
+  );
+}
+
+function FormFieldControl({
+  id,
+  field,
+  error,
+  onChange,
+}: {
+  id: string;
+  field: FormField;
+  error?: string;
+  onChange: () => void;
+}) {
   const title = field.optional ? `${field.label} (Optional)` : field.label;
   const hasOptions = Array.isArray(field.options) && field.options.length > 0;
 
@@ -639,7 +700,7 @@ function FormFieldControl({ field }: { field: FormField }) {
       parsed && !Number.isNaN(parsed.getTime()) ? parsed : undefined;
     return (
       <Form.DatePicker
-        id={field.id}
+        id={id}
         title={title}
         info={field.description}
         defaultValue={defaultValue}
@@ -654,22 +715,31 @@ function FormFieldControl({ field }: { field: FormField }) {
 
   if (hasOptions) {
     const options = field.options ?? [];
+    const labels = field.displayOptions ?? options;
     const defaultValue =
       field.defaultValue && options.includes(field.defaultValue)
         ? field.defaultValue
         : undefined;
     return (
       <Form.Dropdown
-        id={field.id}
+        id={id}
         title={title}
         info={field.description}
         defaultValue={defaultValue}
+        error={error}
+        onChange={onChange}
       >
+        {isSingleNotePicker(field) && (
+          <Form.Dropdown.Item
+            value=""
+            title={field.optional ? "None" : "Select..."}
+          />
+        )}
         {options.map((option, index) => (
           <Form.Dropdown.Item
             key={`${option}-${index}`}
             value={option}
-            title={option}
+            title={labels[index] ?? option}
           />
         ))}
       </Form.Dropdown>
@@ -679,7 +749,7 @@ function FormFieldControl({ field }: { field: FormField }) {
   if (field.type === "textarea") {
     return (
       <Form.TextArea
-        id={field.id}
+        id={id}
         title={title}
         info={field.description}
         placeholder={field.placeholder}
@@ -690,7 +760,7 @@ function FormFieldControl({ field }: { field: FormField }) {
 
   return (
     <Form.TextField
-      id={field.id}
+      id={id}
       title={title}
       info={field.description}
       placeholder={

@@ -32,7 +32,7 @@ A few CLI behaviors the client (`src/lib/obsidianCli.ts`) normalizes:
 
 1. `quickadd:list` populates the searchable command list, grouped by Multi folder.
 2. Selecting a choice runs `quickadd:check --fields` to discover its inputs.
-3. Each requirement maps to a native Raycast form control (text, textarea, dropdown, date, tag-picker for multi-select, optional custom-input field for suggesters).
+3. Each requirement maps to a native Raycast form control (text, textarea, dropdown, date, tag-picker for multi-select, optional custom-input field for suggesters). As in QuickAdd's one-page form, a single-note picker starts with no note picked unless a value is provided, and the form won't submit until a required one has a pick.
 4. Submitting runs `quickadd:run` with the answers pre-seeded. The result reports the created file for a one-keystroke "Open in Obsidian".
 
 Requirements that need a genuinely interactive picker mid-run (heading choosers, multi-file pickers, marked `runtimeOnly`) fall back to **Run Interactively in Obsidian**, which passes `ui` so QuickAdd prompts inside the app.
@@ -42,3 +42,5 @@ Form item ids are positional (`field-0`), not requirement ids, because QuickAdd 
 ## Version requirement
 
 The `fields` and `verify` flags require **QuickAdd >= 2.14**. Older versions expose the CLI but ignore those flags: option fields fall back to plain text, and some captures can report success without writing (the exact bug `verify` surfaces). Update QuickAdd for full fidelity.
+
+In an interactive run's one-page form, note pickers start empty only with **QuickAdd >= 2.31**, which marks them with `picker: "file"`. Older versions send them as plain suggesters, so they keep the first note picked.

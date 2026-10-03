@@ -36,11 +36,15 @@ export interface FormField {
   defaultValue?: string;
   description?: string;
   options?: string[];
+  /** Labels shown for `options` (e.g. note names for note paths). */
+  displayOptions?: string[];
   dateFormat?: string;
   withTime?: boolean;
   optional?: boolean;
   numericConfig?: { min?: number; max?: number; step?: number };
   suggesterConfig?: { allowCustomInput?: boolean; multiSelect?: boolean };
+  /** `"file"` on a suggester that picks notes. Sent by QuickAdd 2.31.0+. */
+  picker?: "file";
 }
 
 export type PromptSpec =
