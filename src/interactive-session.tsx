@@ -594,7 +594,9 @@ function FormPrompt({
   function handleSubmit(values: Record<string, unknown>) {
     const unpicked = prompt.fields.findIndex(
       (field, index) =>
-        isSinglePicker(field) && !field.optional && !values[formItemId(index)],
+        isSingleNotePicker(field) &&
+        !field.optional &&
+        !values[formItemId(index)],
     );
     if (unpicked !== -1) {
       setUnpickedIndex(unpicked);
@@ -660,16 +662,16 @@ function formItemId(index: number): string {
 }
 
 /**
- * A single-pick suggester with options, such as QuickAdd's note picker (the
- * Capture to target or a {{FILE:...}} field). Like QuickAdd's own one-page
- * form, it starts with no pick unless the field provides a value, so an
- * untouched submit never picks the first note for the user. The wire type
- * can't tell a note picker from a `{{VALUE:...|custom}}` list, so both behave
- * this way.
+ * A single-note picker (the Capture to target or a {{FILE:...}} field). Like
+ * QuickAdd's own one-page form, it starts with no pick unless the field
+ * provides a value, so an untouched submit never picks the first note for the
+ * user. QuickAdd before 2.31.0 doesn't mark note pickers, so their fields keep
+ * the first option picked.
  */
-function isSinglePicker(field: FormField): boolean {
+function isSingleNotePicker(field: FormField): boolean {
   return (
     field.type === "suggester" &&
+    field.picker === "file" &&
     !field.suggesterConfig?.multiSelect &&
     Array.isArray(field.options) &&
     field.options.length > 0
@@ -727,7 +729,7 @@ function FormFieldControl({
         error={error}
         onChange={onChange}
       >
-        {isSinglePicker(field) && (
+        {isSingleNotePicker(field) && (
           <Form.Dropdown.Item
             value=""
             title={field.optional ? "None" : "Select..."}

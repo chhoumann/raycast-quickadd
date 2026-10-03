@@ -42,3 +42,5 @@ Form item ids are positional (`field-0`), not requirement ids, because QuickAdd 
 ## Version requirement
 
 The `fields` and `verify` flags require **QuickAdd >= 2.14**. Older versions expose the CLI but ignore those flags: option fields fall back to plain text, and some captures can report success without writing (the exact bug `verify` surfaces). Update QuickAdd for full fidelity.
+
+In an interactive run's one-page form, note pickers start empty only with **QuickAdd >= 2.31**, which marks them with `picker: "file"`. Older versions send them as plain suggesters, so they keep the first note picked.

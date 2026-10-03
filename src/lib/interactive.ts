@@ -43,6 +43,8 @@ export interface FormField {
   optional?: boolean;
   numericConfig?: { min?: number; max?: number; step?: number };
   suggesterConfig?: { allowCustomInput?: boolean; multiSelect?: boolean };
+  /** `"file"` on a suggester that picks notes. Sent by QuickAdd 2.31.0+. */
+  picker?: "file";
 }
 
 export type PromptSpec =
