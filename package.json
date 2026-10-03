@@ -74,6 +74,7 @@
     "build": "ray build -e dist",
     "lint": "ray lint",
     "fix-lint": "ray lint --fix",
-    "test": "vitest run"
+    "test": "vitest run",
+    "e2e:protocol": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/e2e-protocol.mts"
   }
 }
