@@ -36,6 +36,8 @@ export interface FormField {
   defaultValue?: string;
   description?: string;
   options?: string[];
+  /** Labels shown for `options` (e.g. note names for note paths). */
+  displayOptions?: string[];
   dateFormat?: string;
   withTime?: boolean;
   optional?: boolean;
