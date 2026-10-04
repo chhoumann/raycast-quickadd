@@ -209,11 +209,15 @@ async function replyToPrompt(
   requestId: string,
   value: ReplyValue,
 ): Promise<void> {
-  await fetch(url(s, "/reply"), {
+  const res = await fetch(url(s, "/reply"), {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ requestId, value }),
   });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(body.error ?? `Reply failed (${res.status}).`);
+  }
 }
 
 /**

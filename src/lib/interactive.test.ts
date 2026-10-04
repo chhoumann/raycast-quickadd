@@ -21,7 +21,13 @@ afterEach(() => {
 /** Like QuickAdd's server, one poll parks at a time and a second one gets an idle at once. */
 async function promptServer(
   queue: object[] = [],
-  { dropReplies = false } = {},
+  {
+    dropReplies = false,
+    rejectReply,
+  }: {
+    dropReplies?: boolean;
+    rejectReply?: { status: number; body: object };
+  } = {},
 ) {
   const requests: string[] = [];
   const dropped: string[] = [];
@@ -34,10 +40,12 @@ async function promptServer(
       if (!res.writableFinished) dropped.push(`${req.method} ${path}`);
     });
     if (dropReplies && path === "/reply") return req.socket.destroy();
-    const send = (body: object) => {
-      res.writeHead(200, { "content-type": "application/json" });
+    const send = (body: object, status = 200) => {
+      res.writeHead(status, { "content-type": "application/json" });
       res.end(JSON.stringify(body));
     };
+    if (rejectReply && path === "/reply")
+      return send(rejectReply.body, rejectReply.status);
     if (path !== "/poll") return send({ ok: true, interrupted: 0 });
     const event = queue.shift();
     if (event) return send(event);
@@ -120,6 +128,31 @@ describe("driveSession", () => {
       pollsAtAbort,
     );
     expect(states.at(-1)).toMatchObject({ state: "failed" });
+  });
+
+  it("fails with the server's reason and aborts when it rejects a reply", async () => {
+    const { session, requests } = await promptServer([], {
+      rejectReply: { status: 400, body: { ok: false, error: "too long" } },
+    });
+    const { driver, states } = drive(session, {
+      kind: "prompt",
+      pending: {
+        requestId: "r1",
+        prompt: { type: "input", header: "Note", multiline: false },
+      },
+    });
+    await vi.waitFor(() => expect(requests).toContain("GET /poll"));
+
+    driver.answer("draft");
+
+    await vi.waitFor(() => expect(requests).toContain("POST /abort"));
+    const pollsAtAbort = requests.filter((r) => r === "GET /poll").length;
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(requests.filter((r) => r === "POST /abort")).toHaveLength(1);
+    expect(requests.filter((r) => r === "GET /poll")).toHaveLength(
+      pollsAtAbort,
+    );
+    expect(states.at(-1)).toEqual({ state: "failed", message: "too long" });
   });
 
   it("turns a prompt type this version does not know into an unknown prompt", async () => {
