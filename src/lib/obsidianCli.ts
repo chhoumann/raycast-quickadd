@@ -1,6 +1,7 @@
 import { getPreferenceValues } from "@raycast/api";
 import { execFile } from "node:child_process";
 import { accessSync, constants } from "node:fs";
+import { homedir } from "node:os";
 import { promisify } from "node:util";
 import type { InteractiveSession } from "./interactive";
 import type {
@@ -9,6 +10,12 @@ import type {
   ListResponse,
   RunResponse,
 } from "./types";
+import {
+  type Readiness,
+  type Registry,
+  type Vault,
+  ensureVaultReady,
+} from "./vaults";
 
 const execFileAsync = promisify(execFile);
 
@@ -16,10 +23,10 @@ const CLI_CANDIDATES = [
   "/opt/homebrew/bin/obsidian",
   "/usr/local/bin/obsidian",
   "/Applications/Obsidian.app/Contents/MacOS/obsidian-cli",
+  `${homedir()}/Applications/Obsidian.app/Contents/MacOS/obsidian-cli`,
 ];
 
 interface Preferences {
-  vault: string;
   cliPath?: string;
 }
 
@@ -51,13 +58,12 @@ export function resolveCliPath(): string {
  * thrown as ObsidianCliError.
  */
 async function invoke<T extends { ok: boolean }>(
+  vault: Vault,
   command: string,
   params: Record<string, string | undefined>,
 ): Promise<T> {
   const cli = resolveCliPath();
-  const { vault } = getPreferenceValues<Preferences>();
-
-  const args = [`vault=${vault.trim()}`, command];
+  const args = [`vault=${vault.name}`, command];
   for (const [key, value] of Object.entries(params)) {
     if (value === undefined) continue;
     // execFile passes each entry as one argv element, so no shell quoting is
@@ -101,16 +107,50 @@ async function invoke<T extends { ok: boolean }>(
   }
 }
 
-export async function listChoices(): Promise<ListResponse> {
-  return invoke<ListResponse>("quickadd:list", {});
+export async function prepareVault(
+  vault: Vault,
+  choiceId: string | undefined,
+  registry: Registry,
+): Promise<Readiness> {
+  // Callers render a failed Readiness; a rejection would leave them loading.
+  try {
+    const cli = resolveCliPath();
+    return await ensureVaultReady(vault, choiceId, {
+      registry,
+      open: async (url) => {
+        await execFileAsync("open", ["-g", url]);
+      },
+      runCli: async (args) => {
+        try {
+          return (await execFileAsync(cli, args, { timeout: 10_000 })).stdout;
+        } catch {
+          return "";
+        }
+      },
+      sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+      now: Date.now,
+    });
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+export async function listChoices(vault: Vault): Promise<ListResponse> {
+  return invoke<ListResponse>(vault, "quickadd:list", {});
 }
 
 export async function startInteractive(
+  vault: Vault,
   choiceId: string,
 ): Promise<{ session: InteractiveSession; choice: ChoiceRef }> {
-  const response = await invoke<InteractiveResponse>("quickadd:interactive", {
-    id: choiceId,
-  });
+  const response = await invoke<InteractiveResponse>(
+    vault,
+    "quickadd:interactive",
+    { id: choiceId },
+  );
   const { port, sessionId, token, choice } = response;
   if (!response.ok || !port || !sessionId || !token || !choice) {
     throw new ObsidianCliError(
@@ -145,28 +185,33 @@ function runParams(options: RunOptions): Record<string, string | undefined> {
 }
 
 export async function runChoice(
+  vault: Vault,
   choiceId: string,
   options: RunOptions = {},
 ): Promise<RunResponse> {
-  return invoke<RunResponse>("quickadd:run", {
+  return invoke<RunResponse>(vault, "quickadd:run", {
     id: choiceId,
     ...runParams(options),
   });
 }
 
 export async function runChoiceByName(
+  vault: Vault,
   name: string,
   options: RunOptions = {},
 ): Promise<RunResponse> {
-  return invoke<RunResponse>("quickadd:run", {
+  return invoke<RunResponse>(vault, "quickadd:run", {
     choice: name,
     ...runParams(options),
   });
 }
 
-/** Build an obsidian://open URL for the vault, or for a vault-relative file in it. */
-export function obsidianOpenUrl(filePath?: string): string {
-  const { vault } = getPreferenceValues<Preferences>();
-  const url = `obsidian://open?vault=${encodeURIComponent(vault.trim())}`;
-  return filePath ? `${url}&file=${encodeURIComponent(filePath)}` : url;
+export function obsidianOpenUrl(
+  vault: Vault,
+  vaultRelativePath?: string,
+): string {
+  const url = `obsidian://open?vault=${encodeURIComponent(vault.name)}`;
+  return vaultRelativePath
+    ? `${url}&file=${encodeURIComponent(vaultRelativePath)}`
+    : url;
 }

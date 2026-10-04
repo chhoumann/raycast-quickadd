@@ -30,15 +30,18 @@ import {
   initialState,
 } from "./lib/interactive";
 import { obsidianOpenUrl } from "./lib/obsidianCli";
+import type { Vault } from "./lib/vaults";
 
 export const STALL_MS = 3000;
 
 export function InteractiveSessionView({
+  vault,
   choiceName,
   session,
   handoff,
   onEnd,
 }: {
+  vault: Vault;
   choiceName: string;
   session: InteractiveSession;
   handoff?: Handoff;
@@ -109,7 +112,7 @@ export function InteractiveSessionView({
               title="Open Obsidian"
               icon={Icon.AppWindow}
               shortcut={Keyboard.Shortcut.Common.Open}
-              onAction={() => open(obsidianOpenUrl())}
+              onAction={() => open(obsidianOpenUrl(vault))}
             />
             <CancelAction onCancel={onCancel} />
           </ActionPanel>
