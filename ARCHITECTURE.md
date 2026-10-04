@@ -52,6 +52,8 @@ Polling continues while a prompt is open. The poll is the server's only sign tha
 
 The suggester, confirm, checkbox, and info prompts keep their own views. A suggester is a searchable list, which suits a single pick from many items.
 
+A newer QuickAdd can send a prompt type this extension does not know. `nextEvent` turns it into an `unknown` prompt, which shows a screen that names the type, asks the user to update the extension, and offers **Cancel Run**.
+
 Form item ids are positional (`field-0`), not field ids, because QuickAdd field ids can contain characters that stop Raycast from submitting the form. The reply maps them back to field ids.
 
 ## Version requirement

@@ -1,5 +1,6 @@
 import { type Server, createServer } from "node:http";
 import type { AddressInfo } from "node:net";
+import { text } from "node:stream/consumers";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   type InteractiveSession,
@@ -19,9 +20,7 @@ afterEach(() => {
 async function promptServer(events: object[]) {
   const requests: string[] = [];
   server = createServer(async (req, res) => {
-    for await (const _chunk of req) {
-      // drain the body
-    }
+    await text(req);
     const path = new URL(req.url ?? "/", "http://127.0.0.1").pathname;
     requests.push(`${req.method} ${path}`);
     const send = (body: object) => {
@@ -81,6 +80,29 @@ describe("driveSession", () => {
     driver.dispose();
 
     await vi.waitFor(() => expect(requests).toContain("POST /abort"));
+  });
+
+  it("turns a prompt type this version does not know into an unknown prompt", async () => {
+    const { session } = await promptServer([
+      {
+        kind: "prompt",
+        requestId: "r1",
+        prompt: { type: "color", header: "Pick a color" },
+      },
+    ]);
+    const { driver, states } = drive(session, { state: "connecting" });
+    await vi.waitFor(() =>
+      expect(states).toEqual([
+        {
+          state: "prompt",
+          pending: {
+            requestId: "r1",
+            prompt: { type: "unknown", wireType: "color" },
+          },
+        },
+      ]),
+    );
+    driver.dispose();
   });
 
   it("sends no abort after the run is done", async () => {

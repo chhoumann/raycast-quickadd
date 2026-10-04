@@ -37,7 +37,7 @@ export interface FormField {
   picker?: "file";
 }
 
-export type PromptSpec =
+type KnownPrompt =
   | {
       type: "suggester";
       placeholder?: string;
@@ -71,6 +71,26 @@ export type PromptSpec =
   | { type: "info"; header: string; text: string[] }
   | { type: "form"; fields: FormField[] };
 
+/** `unknown` stands for a prompt type added by a newer QuickAdd. */
+export type PromptSpec = KnownPrompt | { type: "unknown"; wireType: string };
+
+const KNOWN_PROMPT_TYPES: Record<KnownPrompt["type"], true> = {
+  suggester: true,
+  multiselect: true,
+  input: true,
+  date: true,
+  confirm: true,
+  checkbox: true,
+  info: true,
+  form: true,
+};
+
+type WirePrompt = KnownPrompt | { type: string };
+
+function isKnownPrompt(prompt: WirePrompt): prompt is KnownPrompt {
+  return Object.hasOwn(KNOWN_PROMPT_TYPES, prompt.type);
+}
+
 export type ReplyValue =
   string | string[] | boolean | Record<string, string | string[]>;
 
@@ -87,6 +107,11 @@ export type SessionEvent =
   | { kind: "idle" };
 
 type RunEvent = Exclude<SessionEvent, { kind: "idle" }>;
+
+/** The poll response as QuickAdd sends it: its prompt types are an open set. */
+type WireEvent =
+  | Exclude<SessionEvent, { kind: "prompt" }>
+  | { kind: "prompt"; requestId: string; prompt: WirePrompt };
 
 export interface InteractiveSession {
   host: string;
@@ -144,8 +169,17 @@ export async function nextEvent(
         `Interactive session poll failed (${res.status}). The run may have ended.`,
       );
     }
-    const event = (await res.json()) as SessionEvent;
-    if (event.kind !== "idle") return event;
+    const event = (await res.json()) as WireEvent;
+    if (event.kind === "idle") continue;
+    if (event.kind !== "prompt") return event;
+    const { requestId, prompt } = event;
+    return {
+      kind: "prompt",
+      requestId,
+      prompt: isKnownPrompt(prompt)
+        ? prompt
+        : { type: "unknown", wireType: prompt.type },
+    };
   }
 }
 

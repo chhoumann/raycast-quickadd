@@ -162,6 +162,8 @@ function PromptView(props: PromptProps) {
           onSubmit={props.onAnswer}
         />
       );
+    case "unknown":
+      return <UnsupportedPrompt {...props} prompt={prompt} />;
   }
 }
 
@@ -337,6 +339,24 @@ function InfoPrompt({
             icon={Icon.ArrowRight}
             onAction={() => onAnswer(true)}
           />
+          <CancelAction onCancel={onCancel} />
+        </ActionPanel>
+      }
+    />
+  );
+}
+
+function UnsupportedPrompt({
+  prompt,
+  choiceName,
+  onCancel,
+}: PromptProps & { prompt: Extract<PromptSpec, { type: "unknown" }> }) {
+  return (
+    <Detail
+      navigationTitle={choiceName}
+      markdown={`# Update the extension\n\nQuickAdd asked for a \`${prompt.wireType}\` prompt, which this version of the extension cannot show. Update the extension to answer it.`}
+      actions={
+        <ActionPanel>
           <CancelAction onCancel={onCancel} />
         </ActionPanel>
       }
