@@ -107,26 +107,30 @@ async function invoke<T extends { ok: boolean }>(
   }
 }
 
-async function cliText(args: string[]): Promise<string> {
-  const cli = resolveCliPath();
-  try {
-    return (await execFileAsync(cli, args, { timeout: 10_000 })).stdout;
-  } catch {
-    return "";
-  }
-}
-
-export function prepareVault(
+export async function prepareVault(
   vault: Vault,
   choiceId: string | undefined,
   registry: Registry,
 ): Promise<Readiness> {
+  let cli: string;
+  try {
+    cli = resolveCliPath();
+  } catch (error) {
+    if (!(error instanceof ObsidianCliError)) throw error;
+    return { ok: false, message: error.message };
+  }
   return ensureVaultReady(vault, choiceId, {
     registry,
     open: async (url) => {
       await execFileAsync("open", ["-g", url]);
     },
-    runCli: cliText,
+    runCli: async (args) => {
+      try {
+        return (await execFileAsync(cli, args, { timeout: 10_000 })).stdout;
+      } catch {
+        return "";
+      }
+    },
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     now: Date.now,
   });
