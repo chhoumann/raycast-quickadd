@@ -43,15 +43,17 @@ describe("fieldSpecFromForm", () => {
   });
 
   it.each([
-    ["a", ["a"]],
-    ["a, c", ["a"]],
+    [["a", "b"], "a", ["a"]],
+    [["a", "b"], "a, c", ["a"]],
+    [["a", "b"], "a, b", ["a", "b"]],
+    [["a", "b", "a, b"], "a, b", ["a, b"]],
   ])(
-    "preselects multi default %j as the options it names",
-    (defaultValue, preselected) => {
+    "with options %j preselects multi default %j as %j",
+    (options, defaultValue, preselected) => {
       const spec = fieldSpecFromForm(
         field({
           type: "suggester",
-          options: ["a", "b"],
+          options,
           defaultValue,
           suggesterConfig: { multiSelect: true },
         }),

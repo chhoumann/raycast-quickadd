@@ -55,15 +55,27 @@ function formatHasTime(dateFormat: string | undefined): boolean {
 }
 
 // QuickAdd's one-page form seeds a multi-select with a comma-separated default.
+// Options are matched longest-first so an option containing ", " wins over a
+// plain comma split, mirroring QuickAdd's splitMultiSelectLabels.
 function multiDefault(
   defaultValue: string | undefined,
   options: Option[],
 ): string[] {
-  const values = new Set(options.map((option) => option.value));
-  return (defaultValue ?? "")
-    .split(",")
-    .map((value) => value.trim())
-    .filter((value) => values.has(value));
+  const values = options
+    .map((option) => option.value)
+    .sort((a, b) => b.length - a.length);
+  const picked: string[] = [];
+  let rest = (defaultValue ?? "").trim();
+  while (rest) {
+    const value = values.find((v) => rest === v || rest.startsWith(`${v}, `));
+    if (!value) break;
+    picked.push(value);
+    rest = rest.slice(value.length + 2);
+  }
+  for (const piece of rest.split(",")) {
+    if (values.includes(piece.trim())) picked.push(piece.trim());
+  }
+  return picked;
 }
 
 export function fieldSpecFromForm(field: FormField): FieldSpec {
