@@ -1,14 +1,5 @@
-import { getPreferenceValues } from "@raycast/api";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-import { ObsidianCliError, resolveCliPath } from "./obsidianCli";
-import type { ChoiceRef } from "./types";
-
-const execFileAsync = promisify(execFile);
-
-interface Preferences {
-  vault: string;
-}
+import { setTimeout as sleep } from "node:timers/promises";
+import type { ChoiceEffect } from "./types";
 
 export interface SuggesterItem {
   title: string;
@@ -47,7 +38,7 @@ export interface FormField {
   picker?: "file";
 }
 
-export type PromptSpec =
+type KnownPrompt =
   | {
       type: "suggester";
       placeholder?: string;
@@ -81,14 +72,46 @@ export type PromptSpec =
   | { type: "info"; header: string; text: string[] }
   | { type: "form"; fields: FormField[] };
 
+/** `unknown` stands for a prompt type added by a newer QuickAdd. */
+export type PromptSpec = KnownPrompt | { type: "unknown"; wireType: string };
+
+const KNOWN_PROMPT_TYPES: Record<KnownPrompt["type"], true> = {
+  suggester: true,
+  multiselect: true,
+  input: true,
+  date: true,
+  confirm: true,
+  checkbox: true,
+  info: true,
+  form: true,
+};
+
+type WirePrompt = KnownPrompt | { type: string };
+
+function isKnownPrompt(prompt: WirePrompt): prompt is KnownPrompt {
+  return Object.hasOwn(KNOWN_PROMPT_TYPES, prompt.type);
+}
+
 export type ReplyValue =
-  string | string[] | boolean | Record<string, string | string[]> | null;
+  string | string[] | boolean | Record<string, string | string[]>;
+
+export interface DoneResult {
+  effect?: ChoiceEffect;
+  /** Vault-relative path of the file the run created or changed. */
+  file?: string;
+}
 
 export type SessionEvent =
   | { kind: "prompt"; requestId: string; prompt: PromptSpec }
-  | { kind: "done"; result: unknown }
+  | { kind: "done"; result: DoneResult }
   | { kind: "error"; error: string }
   | { kind: "idle" };
+
+export type RunEvent = Exclude<SessionEvent, { kind: "idle" }>;
+
+type WireEvent =
+  | Exclude<SessionEvent, { kind: "prompt" }>
+  | { kind: "prompt"; requestId: string; prompt: WirePrompt };
 
 export interface InteractiveSession {
   host: string;
@@ -97,106 +120,176 @@ export interface InteractiveSession {
   token: string;
 }
 
-export async function startInteractive(
-  choiceId: string,
-): Promise<{ session: InteractiveSession; choice: ChoiceRef }> {
-  const cli = resolveCliPath();
-  const { vault } = getPreferenceValues<Preferences>();
-  let stdout: string;
-  try {
-    ({ stdout } = await execFileAsync(
-      cli,
-      [`vault=${vault.trim()}`, "quickadd:interactive", `id=${choiceId}`],
-      {
-        timeout: 30_000,
-        maxBuffer: 4 * 1024 * 1024,
-      },
-    ));
-  } catch (error) {
-    const failed =
-      error && typeof error === "object" && "stdout" in error
-        ? String((error as { stdout: unknown }).stdout).trim()
-        : "";
-    if (failed) stdout = failed;
-    else
-      throw new ObsidianCliError(
-        `Could not start interactive run: ${error instanceof Error ? error.message : String(error)}`,
-      );
-  }
-
-  let parsed: {
-    ok?: boolean;
-    error?: string;
-    host?: string;
-    port?: number;
-    sessionId?: string;
-    token?: string;
-    choice?: ChoiceRef;
-  };
-  try {
-    parsed = JSON.parse(stdout.trim());
-  } catch {
-    throw new ObsidianCliError(
-      stdout.trim() || "Obsidian returned no output. Is the vault open?",
-    );
-  }
-  if (
-    !parsed.ok ||
-    !parsed.port ||
-    !parsed.sessionId ||
-    !parsed.token ||
-    !parsed.choice
-  ) {
-    throw new ObsidianCliError(
-      parsed.error ??
-        "Interactive run could not be started (needs QuickAdd with the interactive bridge).",
-    );
-  }
-  return {
-    session: {
-      host: parsed.host ?? "127.0.0.1",
-      port: parsed.port,
-      sessionId: parsed.sessionId,
-      token: parsed.token,
-    },
-    choice: parsed.choice,
-  };
+export interface PendingPrompt {
+  requestId: string;
+  prompt: PromptSpec;
 }
 
-function baseUrl(s: InteractiveSession): string {
-  return `http://${s.host}:${s.port}`;
+export type SessionState =
+  | { state: "connecting" }
+  | { state: "prompt"; pending: PendingPrompt }
+  | { state: "working" }
+  | { state: "done"; result: DoneResult }
+  | { state: "failed"; message: string }
+  | { state: "cancelled" };
+
+export type SessionEnd = Extract<SessionState, { state: "done" | "cancelled" }>;
+
+/** How a caller that started polling hands the run to the session view. */
+export type Handoff =
+  | { kind: "prompt"; pending: PendingPrompt }
+  | { kind: "poll"; next: Promise<RunEvent>; polls: AbortController };
+
+export function initialState(handoff?: Handoff): SessionState {
+  return handoff?.kind === "prompt"
+    ? { state: "prompt", pending: handoff.pending }
+    : { state: "connecting" };
 }
 
-function authQuery(s: InteractiveSession): string {
-  return `session=${encodeURIComponent(s.sessionId)}&token=${encodeURIComponent(s.token)}`;
+export interface SessionDriver {
+  answer(value: ReplyValue): void;
+  cancel(): void;
+  cancelQuietly(): void;
 }
 
-/** Long-poll for the next session event. Resolves on a prompt, completion, or an idle keepalive. */
-export async function pollSession(
+export function doneMessage(
+  choiceName: string,
+  { effect, file }: DoneResult,
+): string {
+  if (file && effect === "created") return `Created ${file}`;
+  if (file && effect === "changed") return `Added to ${file}`;
+  return `Ran ${choiceName}`;
+}
+
+function url(s: InteractiveSession, path: string): string {
+  return `http://${s.host}:${s.port}${path}?session=${encodeURIComponent(s.sessionId)}&token=${encodeURIComponent(s.token)}`;
+}
+
+export async function nextEvent(
   s: InteractiveSession,
   signal?: AbortSignal,
-): Promise<SessionEvent> {
-  const res = await fetch(`${baseUrl(s)}/poll?${authQuery(s)}`, { signal });
-  if (!res.ok) {
-    throw new Error(
-      `Interactive session poll failed (${res.status}). The run may have ended.`,
-    );
+): Promise<RunEvent> {
+  for (;;) {
+    const res = await fetch(url(s, "/poll"), { signal });
+    if (!res.ok) {
+      throw new Error(
+        `Interactive session poll failed (${res.status}). The run may have ended.`,
+      );
+    }
+    const event = (await res.json()) as WireEvent;
+    if (event.kind === "idle") continue;
+    if (event.kind !== "prompt") return event;
+    const { requestId, prompt } = event;
+    return {
+      kind: "prompt",
+      requestId,
+      prompt: isKnownPrompt(prompt)
+        ? prompt
+        : { type: "unknown", wireType: prompt.type },
+    };
   }
-  return (await res.json()) as SessionEvent;
 }
 
-/** Answer a prompt with its type-appropriate value, or cancel it (aborts the run). */
-export async function replyToPrompt(
+/** The run's end if it comes within `ms`, otherwise what to hand to the session view. */
+export async function firstEvent(
+  s: InteractiveSession,
+  ms: number,
+): Promise<Exclude<RunEvent, { kind: "prompt" }> | Handoff> {
+  const polls = new AbortController();
+  const next = nextEvent(s, polls.signal);
+  const event = await Promise.race([next, sleep(ms, undefined)]);
+  if (!event) return { kind: "poll", next, polls };
+  if (event.kind !== "prompt") return event;
+  const { requestId, prompt } = event;
+  return { kind: "prompt", pending: { requestId, prompt } };
+}
+
+async function replyToPrompt(
   s: InteractiveSession,
   requestId: string,
   value: ReplyValue,
-  cancelled = false,
 ): Promise<void> {
-  await fetch(`${baseUrl(s)}/reply?${authQuery(s)}`, {
+  const res = await fetch(url(s, "/reply"), {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(
-      cancelled ? { requestId, cancelled: true } : { requestId, value },
-    ),
+    body: JSON.stringify({ requestId, value }),
   });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(body.error ?? `Reply failed (${res.status}).`);
+  }
+}
+
+/**
+ * Rejects every open prompt and any the run raises later (QuickAdd >= 2.20). A run
+ * that is mid-work stops at its next prompt.
+ */
+async function abortSession(s: InteractiveSession): Promise<void> {
+  await fetch(url(s, "/abort"), { method: "POST" });
+}
+
+/** Polling continues while a prompt is open: it is the server's only sign that the client is still there. */
+export function driveSession(
+  session: InteractiveSession,
+  {
+    handoff,
+    onChange,
+  }: { handoff?: Handoff; onChange: (state: SessionState) => void },
+): SessionDriver {
+  let current = initialState(handoff);
+  const polls =
+    handoff?.kind === "poll" ? handoff.polls : new AbortController();
+  const isLive = () =>
+    current.state === "connecting" ||
+    current.state === "prompt" ||
+    current.state === "working";
+  const enter = (state: SessionState) => {
+    if (!isLive()) return;
+    current = state;
+    onChange(state);
+  };
+  const end = (state: SessionState, report = true) => {
+    if (!isLive()) return;
+    current = state;
+    if (report) onChange(state);
+    polls.abort();
+    void abortSession(session).catch(() => {});
+  };
+  // A poll or reply that threw leaves a run nobody can drive, so release its prompt.
+  const fail = (error: unknown) =>
+    end({
+      state: "failed",
+      message: error instanceof Error ? error.message : String(error),
+    });
+
+  void (async () => {
+    let pending =
+      handoff?.kind === "poll"
+        ? handoff.next
+        : nextEvent(session, polls.signal);
+    for (;;) {
+      const event = await pending;
+      if (event.kind === "prompt") {
+        const { requestId, prompt } = event;
+        enter({ state: "prompt", pending: { requestId, prompt } });
+      } else if (event.kind === "done") {
+        enter({ state: "done", result: event.result });
+      } else {
+        enter({ state: "failed", message: event.error });
+      }
+      if (!isLive()) return;
+      pending = nextEvent(session, polls.signal);
+    }
+  })().catch(fail);
+
+  return {
+    answer(value) {
+      if (current.state !== "prompt") return;
+      const { requestId } = current.pending;
+      enter({ state: "working" });
+      replyToPrompt(session, requestId, value).catch(fail);
+    },
+    cancel: () => end({ state: "cancelled" }),
+    cancelQuietly: () => end({ state: "cancelled" }, false),
+  };
 }

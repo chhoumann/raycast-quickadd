@@ -6,7 +6,6 @@ import {
   type LaunchProps,
   List,
   Toast,
-  closeMainWindow,
   open,
   popToRoot,
   showHUD,
@@ -17,22 +16,25 @@ import {
   createDeeplink,
   showFailureToast,
   useCachedPromise,
+  useCachedState,
+  useFrecencySorting,
 } from "@raycast/utils";
 import { useEffect, useRef, useState } from "react";
-import { listChoices, obsidianOpenUrl, runChoice } from "./lib/obsidianCli";
-import { choiceIcon } from "./lib/format";
 import {
-  InteractiveSessionView,
-  type PendingPrompt,
-} from "./interactive-session";
-import {
-  type InteractiveSession,
-  pollSession,
+  listChoices,
+  obsidianOpenUrl,
+  runChoice,
   startInteractive,
+} from "./lib/obsidianCli";
+import { choiceIcon } from "./lib/format";
+import { STALL_MS, InteractiveSessionView } from "./interactive-session";
+import {
+  type DoneResult,
+  type InteractiveSession,
+  doneMessage,
+  firstEvent,
 } from "./lib/interactive";
-import type { ChoiceSummary, RunResponse } from "./lib/types";
-
-type RunnableChoice = { id: string; name: string };
+import type { ChoiceSummary } from "./lib/types";
 
 interface RunChoiceContext {
   /** Set when launched from a pinned Quicklink: open this choice directly. */
@@ -58,6 +60,14 @@ function ChoiceList() {
     }
     return response.choices.filter((choice) => choice.runnable);
   });
+  // The hook sorts in place and cannot tell visited items from the rest, so it
+  // gets a copy and the visited ids are kept beside it.
+  const { data: byFrecency, visitItem } = useFrecencySorting(data && [...data]);
+  const [visited, setVisited] = useCachedState<string[]>("visited-choices", []);
+  const visit = (choice: ChoiceSummary) => {
+    void visitItem(choice);
+    setVisited((ids) => (ids.includes(choice.id) ? ids : [...ids, choice.id]));
+  };
 
   if (error) {
     return (
@@ -71,6 +81,9 @@ function ChoiceList() {
     );
   }
 
+  const recent = byFrecency
+    .filter((choice) => visited.includes(choice.id))
+    .slice(0, 5);
   const sections = groupByParent(data ?? []);
 
   return (
@@ -78,10 +91,19 @@ function ChoiceList() {
       isLoading={isLoading}
       searchBarPlaceholder="Search QuickAdd choices..."
     >
+      <List.Section title="Recent">
+        {recent.map((choice) => (
+          <ChoiceItem
+            key={`recent-${choice.id}`}
+            choice={choice}
+            onRun={visit}
+          />
+        ))}
+      </List.Section>
       {sections.map(([parent, choices]) => (
         <List.Section key={parent} title={parent}>
           {choices.map((choice) => (
-            <ChoiceItem key={choice.id} choice={choice} />
+            <ChoiceItem key={choice.id} choice={choice} onRun={visit} />
           ))}
         </List.Section>
       ))}
@@ -90,19 +112,13 @@ function ChoiceList() {
 }
 
 /**
- * Opens one choice directly (used when launched from a pinned Quicklink). Runs it
- * interactively like the list "Run": a prompt-less run just closes with a HUD; a
- * run that raises a prompt hands off to the interactive session view.
+ * Opens one choice directly (used when launched from a pinned Quicklink). The
+ * session view shows the run from the start and closes the window with a HUD.
  */
 function DirectChoice({ choiceId }: { choiceId: string }) {
   const [view, setView] = useState<
     | { phase: "loading" }
-    | {
-        phase: "attach";
-        session: InteractiveSession;
-        choiceName: string;
-        initialPrompt: PendingPrompt;
-      }
+    | { phase: "attach"; session: InteractiveSession; choiceName: string }
     | { phase: "error"; message: string }
   >({ phase: "loading" });
   // Raycast double-invokes effects (StrictMode); without the ref the choice
@@ -111,75 +127,39 @@ function DirectChoice({ choiceId }: { choiceId: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    const abort = new AbortController();
-
-    (async () => {
-      try {
-        startRef.current ??= startInteractive(choiceId);
-        const { session, choice } = await startRef.current;
-        const choiceName = choice.name;
+    startRef.current ??= startInteractive(choiceId);
+    startRef.current.then(
+      ({ session, choice }) => {
+        if (!cancelled)
+          setView({ phase: "attach", session, choiceName: choice.name });
+      },
+      (error) => {
         if (cancelled) return;
-
-        // Pre-poll until the run either raises a prompt or finishes.
-        while (!cancelled) {
-          const event = await pollSession(session, abort.signal);
-          if (cancelled) return;
-          if (event.kind === "idle") continue;
-          if (event.kind === "prompt") {
-            setView({
-              phase: "attach",
-              session,
-              choiceName,
-              initialPrompt: {
-                requestId: event.requestId,
-                prompt: event.prompt,
-              },
-            });
-            return;
-          }
-          if (event.kind === "done") {
-            const result = (event.result ?? {}) as {
-              ok?: boolean;
-              error?: string;
-              file?: string;
-            };
-            if (result.ok === false) {
-              throw new Error(result.error ?? "Choice execution failed");
-            }
-            await showHUD(
-              result.file
-                ? `Ran ${choiceName} → ${result.file}`
-                : `Ran ${choiceName}`,
-            );
-            await closeMainWindow();
-            return;
-          }
-          if (event.kind === "error") {
-            throw new Error(event.error);
-          }
-        }
-      } catch (e) {
-        if (!cancelled) {
-          const message = e instanceof Error ? e.message : String(e);
-          setView({ phase: "error", message });
-          await showFailureToast(e, { title: "Could not run choice" });
-        }
-      }
-    })();
-
+        setView({
+          phase: "error",
+          message: error instanceof Error ? error.message : String(error),
+        });
+        void showFailureToast(error, { title: "Could not run choice" });
+      },
+    );
     return () => {
       cancelled = true;
-      abort.abort();
     };
   }, [choiceId]);
 
   if (view.phase === "attach") {
+    const { choiceName } = view;
     return (
       <InteractiveSessionView
         session={view.session}
-        choiceName={view.choiceName}
-        initialPrompt={view.initialPrompt}
-        onFinish={() => void closeMainWindow()}
+        choiceName={choiceName}
+        onEnd={(end) =>
+          void showHUD(
+            end.state === "done"
+              ? doneMessage(choiceName, end.result)
+              : "Cancelled",
+          )
+        }
       />
     );
   }
@@ -215,45 +195,45 @@ function groupByParent(
   );
 }
 
-function ChoiceItem({ choice }: { choice: ChoiceSummary }) {
-  const { push } = useNavigation();
+function ChoiceItem({
+  choice,
+  onRun,
+}: {
+  choice: ChoiceSummary;
+  onRun: (choice: ChoiceSummary) => void;
+}) {
+  const { push, pop } = useNavigation();
 
-  // Default run: drive the choice interactively, but stay on the list until a
-  // prompt actually appears. We pre-poll here and only open the session view
-  // once the run raises a prompt; a prompt-less run just reports via a toast.
   async function runInteractive() {
+    onRun(choice);
     const toast = await showToast({
       style: Toast.Style.Animated,
       title: `Running ${choice.name}...`,
     });
     try {
       const { session } = await startInteractive(choice.id);
-      const abort = new AbortController();
-      while (true) {
-        const event = await pollSession(session, abort.signal);
-        if (event.kind === "idle") continue;
-        if (event.kind === "prompt") {
-          await toast.hide();
-          push(
-            <InteractiveSessionView
-              session={session}
-              choiceName={choice.name}
-              initialPrompt={{
-                requestId: event.requestId,
-                prompt: event.prompt,
-              }}
-            />,
-          );
-          return;
-        }
-        if (event.kind === "done") {
-          await reportInteractiveDone(toast, choice, event.result);
-          return;
-        }
-        if (event.kind === "error") {
-          throw new Error(event.error);
-        }
+      const first = await firstEvent(session, STALL_MS);
+      if (first.kind === "error") throw new Error(first.error);
+      await toast.hide();
+      if (first.kind === "done") {
+        await showToast(doneToast(choice.name, first.result));
+        return;
       }
+      push(
+        <InteractiveSessionView
+          session={session}
+          choiceName={choice.name}
+          handoff={first}
+          onEnd={(end) => {
+            pop();
+            void showToast(
+              end.state === "done"
+                ? doneToast(choice.name, end.result)
+                : { style: Toast.Style.Success, title: "Cancelled" },
+            );
+          }}
+        />,
+      );
     } catch (error) {
       await toast.hide();
       await showFailureToast(error, { title: `Could not run ${choice.name}` });
@@ -261,6 +241,7 @@ function ChoiceItem({ choice }: { choice: ChoiceSummary }) {
   }
 
   async function runInObsidian() {
+    onRun(choice);
     const toast = await showToast({
       style: Toast.Style.Animated,
       title: `Running ${choice.name} in Obsidian...`,
@@ -269,7 +250,12 @@ function ChoiceItem({ choice }: { choice: ChoiceSummary }) {
     try {
       await open("obsidian://open"); // bring Obsidian forward so prompts are visible
       const result = await runChoice(choice.id, { ui: true });
-      await reportRunResult(toast, choice, result);
+      if (!result.ok) {
+        throw new Error(result.error ?? "Choice execution failed");
+      }
+      await toast.hide();
+      await showToast(doneToast(choice.name, result));
+      await popToRoot();
     } catch (error) {
       await toast.hide();
       await showFailureToast(error, { title: `Could not run ${choice.name}` });
@@ -315,45 +301,16 @@ function ChoiceItem({ choice }: { choice: ChoiceSummary }) {
   );
 }
 
-/** Report a prompt-less interactive run's `done` event (we never left the list). */
-async function reportInteractiveDone(
-  toast: Toast,
-  choice: RunnableChoice,
-  result: unknown,
-) {
-  const r = (result ?? {}) as { ok?: boolean; error?: string; file?: string };
-  if (r.ok === false) {
-    throw new Error(r.error ?? "Choice execution failed");
-  }
-  toast.style = Toast.Style.Success;
-  toast.title = `Ran ${choice.name}`;
-  if (r.file) {
-    const file = r.file;
-    toast.message = file;
-    toast.primaryAction = {
-      title: "Open in Obsidian",
-      onAction: () => open(obsidianOpenUrl(file)),
-    };
-  }
-}
-
-async function reportRunResult(
-  toast: Toast,
-  choice: RunnableChoice,
-  result: RunResponse,
-) {
-  if (!result.ok) {
-    throw new Error(result.error ?? "Choice execution failed");
-  }
-  toast.style = Toast.Style.Success;
-  toast.title = `Ran ${choice.name}`;
-  if (result.file) {
-    const file = result.file;
-    toast.message = file;
-    toast.primaryAction = {
-      title: "Open in Obsidian",
-      onAction: () => open(obsidianOpenUrl(file)),
-    };
-  }
-  await popToRoot();
+function doneToast(choiceName: string, result: DoneResult): Toast.Options {
+  const { file } = result;
+  return {
+    style: Toast.Style.Success,
+    title: doneMessage(choiceName, result),
+    primaryAction: file
+      ? {
+          title: "Open in Obsidian",
+          onAction: () => open(obsidianOpenUrl(file)),
+        }
+      : undefined,
+  };
 }

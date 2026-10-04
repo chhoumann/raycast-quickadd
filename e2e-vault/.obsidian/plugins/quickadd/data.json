@@ -494,6 +494,26 @@
           }
         ]
       }
+    },
+    {
+      "id": "e2e-slow",
+      "name": "Slow macro",
+      "type": "Macro",
+      "command": false,
+      "runOnStartup": false,
+      "macro": {
+        "id": "e2e-slow-macro",
+        "name": "Slow macro",
+        "commands": [
+          {
+            "id": "e2e-slow-script",
+            "name": "slow",
+            "type": "UserScript",
+            "path": "scripts/slow.js",
+            "settings": {}
+          }
+        ]
+      }
     }
   ],
   "inputPrompt": "single-line",

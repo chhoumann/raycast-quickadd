@@ -5,9 +5,8 @@ import {
   Form,
   Icon,
   List,
-  Toast,
-  showToast,
-  useNavigation,
+  open,
+  Keyboard,
 } from "@raycast/api";
 import { showFailureToast } from "@raycast/utils";
 import { useEffect, useRef, useState } from "react";
@@ -19,181 +18,80 @@ import {
   readField,
 } from "./lib/fields";
 import {
+  type Handoff,
   type InteractiveSession,
+  type PendingPrompt,
   type PromptSpec,
   type ReplyValue,
-  type SessionEvent,
-  pollSession,
-  replyToPrompt,
+  type SessionDriver,
+  type SessionEnd,
+  type SessionState,
+  driveSession,
+  initialState,
 } from "./lib/interactive";
+import { obsidianOpenUrl } from "./lib/obsidianCli";
 
-export interface PendingPrompt {
-  requestId: string;
-  prompt: PromptSpec;
-}
-
-type Answer = { cancelled: true } | { cancelled: false; value: ReplyValue };
-
-type Phase =
-  | { state: "prompt"; pending: PendingPrompt }
-  | { state: "working" }
-  | { state: "done"; message: string }
-  | { state: "failed"; message: string };
+export const STALL_MS = 3000;
 
 export function InteractiveSessionView({
   choiceName,
   session,
-  initialPrompt,
-  onFinish,
+  handoff,
+  onEnd,
 }: {
   choiceName: string;
   session: InteractiveSession;
-  initialPrompt: PendingPrompt;
-  /** Called on a successful finish instead of popping (e.g. a Quicklink root closes the window). */
-  onFinish?: () => void;
+  handoff?: Handoff;
+  onEnd: (end: SessionEnd) => void;
 }) {
-  const { pop } = useNavigation();
-  const [phase, setPhase] = useState<Phase>({
-    state: "prompt",
-    pending: initialPrompt,
-  });
-  const answerRef = useRef<((answer: Answer) => void) | null>(null);
-  const openRequestRef = useRef<string | null>(null);
-  // Set when the user cancels a prompt, so the server's resulting abort event is
-  // rendered as a clean "Cancelled" rather than a failure.
-  const userCancelledRef = useRef(false);
+  const [phase, setPhase] = useState(() => initialState(handoff));
+  const [stalled, setStalled] = useState(handoff?.kind === "poll");
+  const driverRef = useRef<SessionDriver | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
-    const abort = new AbortController();
-
-    (async () => {
-      try {
-        // Send the user's answer WITHOUT pausing the poll loop below. Continuous
-        // polling is the server's only liveness signal: if we stopped polling
-        // while a prompt was open, the server couldn't tell a slow user from a
-        // crashed client, and a disconnect would hang the run. So the loop keeps
-        // polling (parking on idle) while this runs in the background.
-        const answerPrompt = async (requestId: string) => {
-          const answer = await new Promise<Answer>((resolve) => {
-            answerRef.current = resolve;
-          });
-          answerRef.current = null;
-          if (cancelled) return;
-          openRequestRef.current = null;
-          // Set the next visible phase synchronously (before the reply round-trip)
-          // so it never races ahead of the loop's terminal event.
-          if (answer.cancelled) userCancelledRef.current = true;
-          else setPhase({ state: "working" });
-          try {
-            await replyToPrompt(
-              session,
-              requestId,
-              answer.cancelled ? null : answer.value,
-              answer.cancelled,
-            );
-          } catch (error) {
-            if (!cancelled) {
-              setPhase({
-                state: "failed",
-                message: error instanceof Error ? error.message : String(error),
-              });
-            }
+    let driver: SessionDriver | undefined;
+    // Raycast runs effects twice in development. Starting after a tick keeps the
+    // throwaway first mount's cleanup from aborting the run.
+    const timer = setTimeout(() => {
+      driver = driveSession(session, {
+        handoff,
+        onChange: (state) => {
+          setPhase(state);
+          setStalled(false);
+          if (state.state === "done" || state.state === "cancelled") {
+            onEnd(state);
           }
-        };
-
-        // Replay a prompt already consumed during hand-off, then poll for the
-        // rest. It is processed only AFTER the await below, so a StrictMode
-        // transient unmount (which sets `cancelled`) is observed first and the
-        // discarded first mount never touches openRequestRef / cancels it.
-        let seeded: PendingPrompt | null = initialPrompt;
-        while (!cancelled) {
-          let event: SessionEvent;
-          if (seeded) {
-            event = {
-              kind: "prompt",
-              requestId: seeded.requestId,
-              prompt: seeded.prompt,
-            };
-            seeded = null;
-            await Promise.resolve();
-          } else {
-            event = await pollSession(session, abort.signal);
-          }
-          if (cancelled) return;
-          if (event.kind === "idle") continue;
-          if (event.kind === "prompt") {
-            openRequestRef.current = event.requestId;
-            setPhase({
-              state: "prompt",
-              pending: { requestId: event.requestId, prompt: event.prompt },
+          if (state.state === "failed") {
+            showFailureToast(new Error(state.message), {
+              title: `${choiceName} failed`,
             });
-            void answerPrompt(event.requestId);
-            continue;
           }
-          if (event.kind === "done") {
-            setPhase({ state: "done", message: `${choiceName} finished` });
-            return;
-          }
-          if (event.kind === "error") {
-            // A user cancel aborts the run server-side; render it as a clean
-            // cancellation instead of a failure.
-            if (userCancelledRef.current) {
-              setPhase({ state: "done", message: "Cancelled" });
-            } else {
-              setPhase({ state: "failed", message: event.error });
-            }
-            return;
-          }
-        }
-      } catch (error) {
-        if (!cancelled) {
-          setPhase({
-            state: "failed",
-            message: error instanceof Error ? error.message : String(error),
-          });
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      abort.abort();
-      answerRef.current?.({ cancelled: true });
-      answerRef.current = null;
-      // Best-effort cancel so the script's prompt doesn't park forever if the
-      // user dismissed the view while a prompt was open.
-      const requestId = openRequestRef.current;
-      if (requestId) {
-        openRequestRef.current = null;
-        void replyToPrompt(session, requestId, null, true).catch(() => {});
-      }
-    };
-  }, [session, choiceName]);
-
-  useEffect(() => {
-    if (phase.state === "done") {
-      showToast({ style: Toast.Style.Success, title: phase.message });
-      const timer = setTimeout(onFinish ?? pop, 400);
-      return () => clearTimeout(timer);
-    }
-    if (phase.state === "failed") {
-      showFailureToast(new Error(phase.message), {
-        title: `${choiceName} failed`,
+        },
       });
-    }
-  }, [phase.state]);
+      driverRef.current = driver;
+    });
+    return () => {
+      clearTimeout(timer);
+      driver?.cancelQuietly();
+    };
+  }, [session]);
+
+  const waiting = phase.state === "connecting" || phase.state === "working";
+  useEffect(() => {
+    if (stalled || !waiting) return;
+    const timer = setTimeout(() => setStalled(true), STALL_MS);
+    return () => clearTimeout(timer);
+  }, [phase, stalled]);
+
+  const onCancel = () => driverRef.current?.cancel();
 
   if (phase.state === "prompt") {
-    const onAnswer = (value: ReplyValue) =>
-      answerRef.current?.({ cancelled: false, value });
-    const onCancel = () => answerRef.current?.({ cancelled: true });
     return (
       <PromptView
         key={phase.pending.requestId}
         pending={phase.pending}
         choiceName={choiceName}
-        onAnswer={onAnswer}
+        onAnswer={(value) => driverRef.current?.answer(value)}
         onCancel={onCancel}
       />
     );
@@ -201,27 +99,51 @@ export function InteractiveSessionView({
 
   return (
     <List
-      isLoading={phase.state === "working"}
+      isLoading={waiting && !stalled}
       navigationTitle={choiceName}
       searchBarPlaceholder={`Running ${choiceName}...`}
+      actions={
+        waiting ? (
+          <ActionPanel>
+            <Action
+              title="Open Obsidian"
+              icon={Icon.AppWindow}
+              shortcut={Keyboard.Shortcut.Common.Open}
+              onAction={() => open(obsidianOpenUrl())}
+            />
+            <CancelAction onCancel={onCancel} />
+          </ActionPanel>
+        ) : undefined
+      }
     >
       <List.EmptyView
         icon={phase.state === "failed" ? Icon.ExclamationMark : Icon.Wand}
-        title={
-          phase.state === "working"
-            ? "Working..."
-            : phase.state === "failed"
-              ? "Run failed"
-              : "Done"
-        }
+        title={emptyTitle(phase)}
         description={
           phase.state === "failed"
             ? phase.message
-            : `Complete each prompt from ${choiceName} as it appears.`
+            : waiting && stalled
+              ? "QuickAdd may be asking something in Obsidian, such as a Templater prompt."
+              : undefined
         }
       />
     </List>
   );
+}
+
+function emptyTitle(phase: Exclude<SessionState, { state: "prompt" }>): string {
+  switch (phase.state) {
+    case "connecting":
+      return "Starting...";
+    case "working":
+      return "Working...";
+    case "failed":
+      return "Run failed";
+    case "done":
+      return "Done";
+    case "cancelled":
+      return "Cancelled";
+  }
 }
 
 interface PromptProps {
@@ -264,6 +186,8 @@ function PromptView(props: PromptProps) {
           onSubmit={props.onAnswer}
         />
       );
+    case "unknown":
+      return <UnsupportedPrompt {...props} prompt={prompt} />;
   }
 }
 
@@ -439,6 +363,24 @@ function InfoPrompt({
             icon={Icon.ArrowRight}
             onAction={() => onAnswer(true)}
           />
+          <CancelAction onCancel={onCancel} />
+        </ActionPanel>
+      }
+    />
+  );
+}
+
+function UnsupportedPrompt({
+  prompt,
+  choiceName,
+  onCancel,
+}: PromptProps & { prompt: Extract<PromptSpec, { type: "unknown" }> }) {
+  return (
+    <Detail
+      navigationTitle={choiceName}
+      markdown={`# Update the extension\n\nQuickAdd asked for a \`${prompt.wireType}\` prompt, which this version of the extension cannot show. Update the extension to answer it.`}
+      actions={
+        <ActionPanel>
           <CancelAction onCancel={onCancel} />
         </ActionPanel>
       }

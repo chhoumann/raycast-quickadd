@@ -2,7 +2,13 @@ import { getPreferenceValues } from "@raycast/api";
 import { execFile } from "node:child_process";
 import { accessSync, constants } from "node:fs";
 import { promisify } from "node:util";
-import type { ListResponse, RunResponse } from "./types";
+import type { InteractiveSession } from "./interactive";
+import type {
+  ChoiceRef,
+  InteractiveResponse,
+  ListResponse,
+  RunResponse,
+} from "./types";
 
 const execFileAsync = promisify(execFile);
 
@@ -99,6 +105,25 @@ export async function listChoices(): Promise<ListResponse> {
   return invoke<ListResponse>("quickadd:list", {});
 }
 
+export async function startInteractive(
+  choiceId: string,
+): Promise<{ session: InteractiveSession; choice: ChoiceRef }> {
+  const response = await invoke<InteractiveResponse>("quickadd:interactive", {
+    id: choiceId,
+  });
+  const { port, sessionId, token, choice } = response;
+  if (!response.ok || !port || !sessionId || !token || !choice) {
+    throw new ObsidianCliError(
+      response.error ??
+        "Interactive run could not be started (needs QuickAdd with the interactive bridge).",
+    );
+  }
+  return {
+    session: { host: response.host ?? "127.0.0.1", port, sessionId, token },
+    choice,
+  };
+}
+
 export interface RunOptions {
   /** Allow interactive prompts inside Obsidian instead of failing headlessly. */
   ui?: boolean;
@@ -139,8 +164,9 @@ export async function runChoiceByName(
   });
 }
 
-/** Build an obsidian://open URL for a vault-relative file path. */
-export function obsidianOpenUrl(filePath: string): string {
+/** Build an obsidian://open URL for the vault, or for a vault-relative file in it. */
+export function obsidianOpenUrl(filePath?: string): string {
   const { vault } = getPreferenceValues<Preferences>();
-  return `obsidian://open?vault=${encodeURIComponent(vault.trim())}&file=${encodeURIComponent(filePath)}`;
+  const url = `obsidian://open?vault=${encodeURIComponent(vault.trim())}`;
+  return filePath ? `${url}&file=${encodeURIComponent(filePath)}` : url;
 }

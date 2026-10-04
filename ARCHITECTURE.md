@@ -31,9 +31,13 @@ A few CLI behaviors the client (`src/lib/obsidianCli.ts`) normalizes:
 
 1. `quickadd:list` fills the searchable list, grouped by Multi folder.
 2. **Run** calls `quickadd:interactive` for the selected choice.
-3. The extension long-polls the prompt server's `/poll`. Each event is a `prompt`, `done`, `error`, or an `idle` keepalive. The list stays on screen until the first prompt arrives, so a choice without prompts finishes with just a toast.
+3. The extension long-polls the prompt server's `/poll`. Each event is a `prompt`, `done`, `error`, or an `idle` keepalive. The list stays on screen until the first prompt arrives, so a choice without prompts finishes with just a toast. If nothing arrives within three seconds, the list hands its poll to the run's view.
 4. Each prompt renders as a native control, and the answer goes back through `/reply`. QuickAdd collects a choice's declared inputs first, as one `form` prompt. Prompts that a macro script raises later arrive one at a time.
-5. The `done` event names the created file for **Open in Obsidian**.
+5. The `done` event names the file and its `effect`, so the finish message reads "Created <file>" or "Added to <file>" and offers **Open in Obsidian**. Without a created or changed file it reads "Ran <choice>".
+
+A pinned Quicklink opens the run's view at once instead of waiting on the list. When the view has waited three seconds with no prompt, it says QuickAdd may be asking something inside Obsidian (a Templater prompt, for example) and offers **Open Obsidian** (⌘O).
+
+**Cancel Run**, or leaving the run's view while the run is live, posts `/abort`. QuickAdd rejects the open prompt and every prompt the run raises later, so a run that is mid-work stops at its next prompt. The extension never aborts a run that has ended. `driveSession` in `src/lib/interactive.ts` holds the run's state (connecting, prompt, working, done, failed, cancelled) and owns these rules, so they are unit tested without Raycast.
 
 Polling continues while a prompt is open. The poll is the server's only sign that Raycast is still there, so it can tell a slow user from a client that went away.
 
@@ -48,11 +52,15 @@ Polling continues while a prompt is open. The poll is the server's only sign tha
 
 The suggester, confirm, checkbox, and info prompts keep their own views. A suggester is a searchable list, which suits a single pick from many items.
 
+A newer QuickAdd can send a prompt type this extension does not know. `nextEvent` turns it into an `unknown` prompt, which shows a screen that names the type, asks the user to update the extension, and offers **Cancel Run**.
+
 Form item ids are positional (`field-0`), not field ids, because QuickAdd field ids can contain characters that stop Raycast from submitting the form. The reply maps them back to field ids.
 
 ## Version requirement
 
 **Run** needs **QuickAdd >= 2.17.2**. `quickadd:interactive` exists from 2.16, and from 2.17.2 it collects a choice's declared inputs as one form even when QuickAdd's one-page input setting is off. Before that, the inputs arrive one prompt at a time.
+
+**QuickAdd >= 2.20** added `/abort` and the `effect` field. Before it, **Cancel Run** does not stop the run in Obsidian, and the finish message always reads "Ran <choice>".
 
 The `verify` flag that **Run in Obsidian** and Quick Capture pass needs **QuickAdd >= 2.14**. Older versions ignore it, and some captures can report success without writing.
 

@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
 import {
   type FieldSpec,
@@ -30,7 +30,7 @@ function userInput(spec: FieldSpec): { raw: unknown; custom?: string } {
       if (spec.notePicker) {
         const target =
           spec.options.find((o) => o.value === "Output/Picked.md") ??
-          spec.options.find((o) => o.value.startsWith("People/"));
+          spec.options.find((o) => o.value.endsWith("People/Ada Lovelace.md"));
         return { raw: target?.value ?? "" };
       }
       return {
@@ -75,21 +75,32 @@ function reply(prompt: PromptSpec): unknown {
   }
 }
 
-async function run(choiceId: string): Promise<{ file?: string }> {
-  const start = JSON.parse(obsidian("quickadd:interactive", `id=${choiceId}`));
-  if (!start.ok) throw new Error(start.error);
-  const base = `http://${start.host}:${start.port}`;
-  const auth = `session=${start.sessionId}&token=${start.token}`;
+async function start(choiceId: string) {
+  const started = JSON.parse(
+    obsidian("quickadd:interactive", `id=${choiceId}`),
+  );
+  if (!started.ok) throw new Error(started.error);
+  return (path: string) =>
+    `http://${started.host}:${started.port}${path}?session=${started.sessionId}&token=${started.token}`;
+}
+
+async function nextEvent(at: (path: string) => string): Promise<SessionEvent> {
   for (;;) {
-    const event = (await (
-      await fetch(`${base}/poll?${auth}`)
-    ).json()) as SessionEvent;
-    if (event.kind === "idle") continue;
+    const event = (await (await fetch(at("/poll"))).json()) as SessionEvent;
+    if (event.kind !== "idle") return event;
+  }
+}
+
+async function run(choiceId: string) {
+  const at = await start(choiceId);
+  for (;;) {
+    const event = await nextEvent(at);
     if (event.kind === "error") throw new Error(event.error);
-    if (event.kind === "done") return event.result as { file?: string };
+    if (event.kind === "done") return { result: event.result, at };
+    if (event.kind !== "prompt") continue;
     const value = reply(event.prompt);
     console.log(`  ${event.prompt.type} -> ${JSON.stringify(value)}`);
-    const res = await fetch(`${base}/reply?${auth}`, {
+    const res = await fetch(at("/reply"), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ requestId: event.requestId, value }),
@@ -150,7 +161,7 @@ let failed = 0;
 for (const [id, path, expected] of cases) {
   console.log(`${id}`);
   try {
-    const result = await run(id);
+    const { result } = await run(id);
     await sleep(300);
     const content = note(path);
     const missing = expected.filter((text) => !content.includes(text));
@@ -165,7 +176,55 @@ for (const [id, path, expected] of cases) {
     console.log(`  FAIL ${error instanceof Error ? error.message : error}`);
   }
 }
-console.log(
-  failed ? `${failed} of ${cases.length} failed` : `all ${cases.length} passed`,
-);
+const aborts: Array<[name: string, check: () => Promise<void>]> = [
+  [
+    "abort while the run is mid-work",
+    async () => {
+      const at = await start("e2e-slow");
+      const abort = await fetch(at("/abort"), { method: "POST" });
+      const body = await abort.json();
+      if (!body.ok || body.interrupted !== 0) {
+        throw new Error(`abort answered ${JSON.stringify(body)}`);
+      }
+      const event = await nextEvent(at);
+      if (event.kind !== "error") {
+        throw new Error(`run was not aborted: ${JSON.stringify(event)}`);
+      }
+      await sleep(300);
+      const marker = note("Output/Slow aborted.md");
+      if (!marker.includes("Input cancelled by user")) {
+        throw new Error(`the prompt was not cancelled: ${marker.trim()}`);
+      }
+      if (existsSync(new URL("Output/Slow.md", VAULT_DIR))) {
+        throw new Error("the aborted run still wrote Output/Slow.md");
+      }
+    },
+  ],
+  [
+    "abort after the run is done",
+    async () => {
+      const { at } = await run("e2e-text");
+      const abort = await fetch(at("/abort"), { method: "POST" });
+      const body = await abort.json();
+      if (abort.status !== 409 || body.ok !== false) {
+        throw new Error(
+          `abort answered ${abort.status} ${JSON.stringify(body)}`,
+        );
+      }
+    },
+  ],
+];
+for (const [name, check] of aborts) {
+  console.log(name);
+  try {
+    await check();
+    console.log("  ok");
+  } catch (error) {
+    failed++;
+    console.log(`  FAIL ${error instanceof Error ? error.message : error}`);
+  }
+}
+
+const total = cases.length + aborts.length;
+console.log(failed ? `${failed} of ${total} failed` : `all ${total} passed`);
 process.exit(failed ? 1 : 0);
