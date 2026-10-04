@@ -30,7 +30,7 @@ function userInput(spec: FieldSpec): { raw: unknown; custom?: string } {
       if (spec.notePicker) {
         const target =
           spec.options.find((o) => o.value === "Output/Picked.md") ??
-          spec.options.find((o) => o.value.startsWith("People/"));
+          spec.options.find((o) => o.value.endsWith("People/Ada Lovelace.md"));
         return { raw: target?.value ?? "" };
       }
       return {
