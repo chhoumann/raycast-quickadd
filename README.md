@@ -51,7 +51,7 @@ pnpm test     # unit tests for field parsing and validation
 
 1. Build QuickAdd in `~/Developer/quickadd` (set `QUICKADD_DIR` to use another checkout), then run `scripts/setup-e2e-vault.sh` to copy the plugin into `e2e-vault/`.
 2. Open `e2e-vault/` in Obsidian with **Open folder as vault**, and turn on community plugins when Obsidian asks.
-3. Run `pnpm e2e:protocol`. The script runs every choice through `quickadd:interactive`, answers each prompt with replies built by `readField`, and checks the notes QuickAdd writes to `e2e-vault/Output/`.
+3. Run `pnpm e2e:protocol`. The script runs every choice through `quickadd:interactive`, answers each prompt with replies built by `readField`, and checks the notes QuickAdd writes to `e2e-vault/Output/`. It also aborts a slow macro mid-work and checks that it stops at its next prompt, and checks that `/abort` after a finished run changes nothing.
 
 To see the forms in Raycast, set the extension's **Vault Name** to `e2e-vault` and open a choice through its deeplink.
 
