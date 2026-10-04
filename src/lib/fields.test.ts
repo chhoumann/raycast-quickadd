@@ -42,6 +42,24 @@ describe("fieldSpecFromForm", () => {
     expect(spec).toMatchObject({ kind: "multi", allowCustom: true });
   });
 
+  it.each([
+    ["a", ["a"]],
+    ["a, c", ["a"]],
+  ])(
+    "preselects multi default %j as the options it names",
+    (defaultValue, preselected) => {
+      const spec = fieldSpecFromForm(
+        field({
+          type: "suggester",
+          options: ["a", "b"],
+          defaultValue,
+          suggesterConfig: { multiSelect: true },
+        }),
+      );
+      expect(spec).toMatchObject({ kind: "multi", preselected });
+    },
+  );
+
   it("renders a field-suggest without options as free text", () => {
     expect(fieldSpecFromForm(field({ type: "field-suggest" })).kind).toBe(
       "text",

@@ -54,6 +54,18 @@ function formatHasTime(dateFormat: string | undefined): boolean {
   );
 }
 
+// QuickAdd's one-page form seeds a multi-select with a comma-separated default.
+function multiDefault(
+  defaultValue: string | undefined,
+  options: Option[],
+): string[] {
+  const values = new Set(options.map((option) => option.value));
+  return (defaultValue ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter((value) => values.has(value));
+}
+
 export function fieldSpecFromForm(field: FormField): FieldSpec {
   const base: FieldBase = {
     id: field.id,
@@ -96,7 +108,7 @@ export function fieldSpecFromForm(field: FormField): FieldSpec {
           kind: "multi",
           options,
           allowCustom,
-          preselected: [],
+          preselected: multiDefault(field.defaultValue, options),
         };
       }
       return {
