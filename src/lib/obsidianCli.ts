@@ -112,28 +112,30 @@ export async function prepareVault(
   choiceId: string | undefined,
   registry: Registry,
 ): Promise<Readiness> {
-  let cli: string;
+  // Callers render a failed Readiness; a rejection would leave them loading.
   try {
-    cli = resolveCliPath();
+    const cli = resolveCliPath();
+    return await ensureVaultReady(vault, choiceId, {
+      registry,
+      open: async (url) => {
+        await execFileAsync("open", ["-g", url]);
+      },
+      runCli: async (args) => {
+        try {
+          return (await execFileAsync(cli, args, { timeout: 10_000 })).stdout;
+        } catch {
+          return "";
+        }
+      },
+      sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+      now: Date.now,
+    });
   } catch (error) {
-    if (!(error instanceof ObsidianCliError)) throw error;
-    return { ok: false, message: error.message };
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : String(error),
+    };
   }
-  return ensureVaultReady(vault, choiceId, {
-    registry,
-    open: async (url) => {
-      await execFileAsync("open", ["-g", url]);
-    },
-    runCli: async (args) => {
-      try {
-        return (await execFileAsync(cli, args, { timeout: 10_000 })).stdout;
-      } catch {
-        return "";
-      }
-    },
-    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-    now: Date.now,
-  });
 }
 
 export async function listChoices(vault: Vault): Promise<ListResponse> {
