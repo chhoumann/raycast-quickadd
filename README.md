@@ -9,7 +9,7 @@ Obsidian ships a command-line interface (Settings → General → Command line i
 1. The command lists your choices with `quickadd:list`, grouped by their Multi folders.
 2. **Run** starts the choice with `quickadd:interactive`. QuickAdd runs it inside Obsidian and sends each prompt to Raycast instead of opening a modal.
 3. The extension renders each prompt as a native Raycast control. A choice's declared inputs arrive together as one form. Prompts from a macro script (`inputPrompt`, `suggester`, `datePrompt`, and the rest) arrive one at a time.
-4. When the run finishes, a toast names the created or updated file and offers **Open in Obsidian**.
+4. When the run finishes, a toast says what it did ("Created <file>" or "Added to <file>") and offers **Open in Obsidian**.
 
 **Run in Obsidian** (⌘K) runs the choice inside Obsidian with QuickAdd's own modals.
 
@@ -25,6 +25,7 @@ The form renders each input from the field metadata QuickAdd sends. To get a lar
 ## Requirements
 
 - **QuickAdd >= 2.17.2.** From 2.17.2, `quickadd:interactive` collects a choice's declared inputs as one form. Earlier versions ask for them one prompt at a time, or lack `quickadd:interactive` entirely (before 2.16).
+- **QuickAdd >= 2.20** for **Cancel Run** to stop the run in Obsidian, and for the "Created" and "Added to" finish messages.
 - **QuickAdd >= 2.31** for note pickers that start empty. Older versions keep the first note picked in a note picker.
 - **Obsidian with the CLI enabled**, and the target vault open (the CLI talks to the running app).
 

@@ -33,7 +33,7 @@ A few CLI behaviors the client (`src/lib/obsidianCli.ts`) normalizes:
 2. **Run** calls `quickadd:interactive` for the selected choice.
 3. The extension long-polls the prompt server's `/poll`. Each event is a `prompt`, `done`, `error`, or an `idle` keepalive. The list stays on screen until the first prompt arrives, so a choice without prompts finishes with just a toast.
 4. Each prompt renders as a native control, and the answer goes back through `/reply`. QuickAdd collects a choice's declared inputs first, as one `form` prompt. Prompts that a macro script raises later arrive one at a time.
-5. The `done` event names the created file for **Open in Obsidian**.
+5. The `done` event names the file and its `effect`, so the finish message reads "Created <file>" or "Added to <file>" and offers **Open in Obsidian**. Without a created or changed file it reads "Ran <choice>".
 
 A pinned Quicklink opens the run's view at once instead of waiting on the list.
 
@@ -58,7 +58,7 @@ Form item ids are positional (`field-0`), not field ids, because QuickAdd field 
 
 **Run** needs **QuickAdd >= 2.17.2**. `quickadd:interactive` exists from 2.16, and from 2.17.2 it collects a choice's declared inputs as one form even when QuickAdd's one-page input setting is off. Before that, the inputs arrive one prompt at a time.
 
-**Cancel Run** stops the run in Obsidian only with **QuickAdd >= 2.20**, which added `/abort`.
+**QuickAdd >= 2.20** added `/abort` and the `effect` field. Before it, **Cancel Run** does not stop the run in Obsidian, and the finish message always reads "Ran <choice>".
 
 The `verify` flag that **Run in Obsidian** and Quick Capture pass needs **QuickAdd >= 2.14**. Older versions ignore it, and some captures can report success without writing.
 

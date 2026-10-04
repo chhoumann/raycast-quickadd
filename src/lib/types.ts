@@ -2,6 +2,9 @@
 
 export type ChoiceType = "Template" | "Capture" | "Macro" | "Multi";
 
+/** What a run did to its file. Sent by QuickAdd >= 2.20. */
+export type ChoiceEffect = "created" | "changed" | "unchanged" | "unknown";
+
 export interface ChoiceSummary {
   id: string;
   name: string;
@@ -33,6 +36,7 @@ export interface RunResponse {
   choice?: ChoiceRef;
   /** Vault-relative path of the created/updated file (verified outcome path only). */
   file?: string;
+  effect?: ChoiceEffect;
   /** True when the engine confirmed the outcome; false on the legacy void-execute path. */
   verified?: boolean;
   aborted?: boolean;

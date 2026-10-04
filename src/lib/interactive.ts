@@ -1,3 +1,5 @@
+import type { ChoiceEffect } from "./types";
+
 export interface SuggesterItem {
   title: string;
   value: string;
@@ -72,9 +74,15 @@ export type PromptSpec =
 export type ReplyValue =
   string | string[] | boolean | Record<string, string | string[]>;
 
+export interface DoneResult {
+  effect?: ChoiceEffect;
+  /** Vault-relative path of the file the run created or changed. */
+  file?: string;
+}
+
 export type SessionEvent =
   | { kind: "prompt"; requestId: string; prompt: PromptSpec }
-  | { kind: "done"; result: unknown }
+  | { kind: "done"; result: DoneResult }
   | { kind: "error"; error: string }
   | { kind: "idle" };
 
@@ -97,7 +105,7 @@ export type SessionState =
   | { state: "connecting" }
   | { state: "prompt"; pending: PendingPrompt }
   | { state: "working" }
-  | { state: "done"; result: unknown }
+  | { state: "done"; result: DoneResult }
   | { state: "failed"; message: string }
   | { state: "cancelled" };
 
@@ -109,6 +117,15 @@ export interface SessionDriver {
   cancel(): void;
   /** Stops the run in Obsidian if it is still live, without reporting a state. */
   dispose(): void;
+}
+
+export function doneMessage(
+  choiceName: string,
+  { effect, file }: DoneResult,
+): string {
+  if (file && effect === "created") return `Created ${file}`;
+  if (file && effect === "changed") return `Added to ${file}`;
+  return `Ran ${choiceName}`;
 }
 
 function url(s: InteractiveSession, path: string): string {

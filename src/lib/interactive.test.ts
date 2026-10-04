@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   type InteractiveSession,
   type SessionState,
+  doneMessage,
   driveSession,
 } from "./interactive";
 
@@ -97,5 +98,29 @@ describe("driveSession", () => {
     await new Promise((resolve) => setTimeout(resolve, 100));
     expect(requests).toEqual(["GET /poll"]);
     expect(states).toEqual([{ state: "done", result: { ok: true } }]);
+  });
+});
+
+describe("doneMessage", () => {
+  it("names the file the run created", () => {
+    expect(
+      doneMessage("New note", { effect: "created", file: "Output/A.md" }),
+    ).toBe("Created Output/A.md");
+  });
+
+  it("names the file the run added to", () => {
+    expect(
+      doneMessage("Log", { effect: "changed", file: "Output/Inbox.md" }),
+    ).toBe("Added to Output/Inbox.md");
+  });
+
+  it("names the choice when the file did not change or the effect is unknown", () => {
+    expect(
+      doneMessage("Log", { effect: "unchanged", file: "Output/Inbox.md" }),
+    ).toBe("Ran Log");
+    expect(doneMessage("Macro", { effect: "unknown" })).toBe("Ran Macro");
+    expect(doneMessage("Old QuickAdd", { file: "Output/A.md" })).toBe(
+      "Ran Old QuickAdd",
+    );
   });
 });

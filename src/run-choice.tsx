@@ -26,10 +26,13 @@ import {
 } from "./lib/obsidianCli";
 import { choiceIcon } from "./lib/format";
 import { InteractiveSessionView } from "./interactive-session";
-import { type InteractiveSession, nextEvent } from "./lib/interactive";
-import type { ChoiceSummary, RunResponse } from "./lib/types";
-
-type RunnableChoice = { id: string; name: string };
+import {
+  type DoneResult,
+  type InteractiveSession,
+  doneMessage,
+  nextEvent,
+} from "./lib/interactive";
+import type { ChoiceSummary } from "./lib/types";
 
 interface RunChoiceContext {
   /** Set when launched from a pinned Quicklink: open this choice directly. */
@@ -131,7 +134,7 @@ function DirectChoice({ choiceId }: { choiceId: string }) {
         onEnd={(end) =>
           void showHUD(
             end.state === "done"
-              ? doneToast(choiceName, end.result).title
+              ? doneMessage(choiceName, end.result)
               : "Cancelled",
           )
         }
@@ -219,7 +222,12 @@ function ChoiceItem({ choice }: { choice: ChoiceSummary }) {
     try {
       await open("obsidian://open"); // bring Obsidian forward so prompts are visible
       const result = await runChoice(choice.id, { ui: true });
-      await reportRunResult(toast, choice, result);
+      if (!result.ok) {
+        throw new Error(result.error ?? "Choice execution failed");
+      }
+      await toast.hide();
+      await showToast(doneToast(choice.name, result));
+      await popToRoot();
     } catch (error) {
       await toast.hide();
       await showFailureToast(error, { title: `Could not run ${choice.name}` });
@@ -265,12 +273,11 @@ function ChoiceItem({ choice }: { choice: ChoiceSummary }) {
   );
 }
 
-function doneToast(choiceName: string, result: unknown): Toast.Options {
-  const { file } = (result ?? {}) as { file?: string };
+function doneToast(choiceName: string, result: DoneResult): Toast.Options {
+  const { file } = result;
   return {
     style: Toast.Style.Success,
-    title: `Ran ${choiceName}`,
-    message: file,
+    title: doneMessage(choiceName, result),
     primaryAction: file
       ? {
           title: "Open in Obsidian",
@@ -278,25 +285,4 @@ function doneToast(choiceName: string, result: unknown): Toast.Options {
         }
       : undefined,
   };
-}
-
-async function reportRunResult(
-  toast: Toast,
-  choice: RunnableChoice,
-  result: RunResponse,
-) {
-  if (!result.ok) {
-    throw new Error(result.error ?? "Choice execution failed");
-  }
-  toast.style = Toast.Style.Success;
-  toast.title = `Ran ${choice.name}`;
-  if (result.file) {
-    const file = result.file;
-    toast.message = file;
-    toast.primaryAction = {
-      title: "Open in Obsidian",
-      onAction: () => open(obsidianOpenUrl(file)),
-    };
-  }
-  await popToRoot();
 }
