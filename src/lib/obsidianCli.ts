@@ -2,7 +2,13 @@ import { getPreferenceValues } from "@raycast/api";
 import { execFile } from "node:child_process";
 import { accessSync, constants } from "node:fs";
 import { promisify } from "node:util";
-import type { ListResponse, RunResponse } from "./types";
+import type { InteractiveSession } from "./interactive";
+import type {
+  ChoiceRef,
+  InteractiveResponse,
+  ListResponse,
+  RunResponse,
+} from "./types";
 
 const execFileAsync = promisify(execFile);
 
@@ -97,6 +103,25 @@ async function invoke<T extends { ok: boolean }>(
 
 export async function listChoices(): Promise<ListResponse> {
   return invoke<ListResponse>("quickadd:list", {});
+}
+
+export async function startInteractive(
+  choiceId: string,
+): Promise<{ session: InteractiveSession; choice: ChoiceRef }> {
+  const response = await invoke<InteractiveResponse>("quickadd:interactive", {
+    id: choiceId,
+  });
+  const { port, sessionId, token, choice } = response;
+  if (!response.ok || !port || !sessionId || !token || !choice) {
+    throw new ObsidianCliError(
+      response.error ??
+        "Interactive run could not be started (needs QuickAdd with the interactive bridge).",
+    );
+  }
+  return {
+    session: { host: response.host ?? "127.0.0.1", port, sessionId, token },
+    choice,
+  };
 }
 
 export interface RunOptions {

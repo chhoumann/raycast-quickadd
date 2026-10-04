@@ -38,3 +38,13 @@ export interface RunResponse {
   aborted?: boolean;
   durationMs?: number;
 }
+
+export interface InteractiveResponse {
+  ok: boolean;
+  error?: string;
+  choice?: ChoiceRef;
+  host?: string;
+  port?: number;
+  sessionId?: string;
+  token?: string;
+}

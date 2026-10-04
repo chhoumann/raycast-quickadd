@@ -1,15 +1,3 @@
-import { getPreferenceValues } from "@raycast/api";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-import { ObsidianCliError, resolveCliPath } from "./obsidianCli";
-import type { ChoiceRef } from "./types";
-
-const execFileAsync = promisify(execFile);
-
-interface Preferences {
-  vault: string;
-}
-
 export interface SuggesterItem {
   title: string;
   value: string;
@@ -95,72 +83,6 @@ export interface InteractiveSession {
   port: number;
   sessionId: string;
   token: string;
-}
-
-export async function startInteractive(
-  choiceId: string,
-): Promise<{ session: InteractiveSession; choice: ChoiceRef }> {
-  const cli = resolveCliPath();
-  const { vault } = getPreferenceValues<Preferences>();
-  let stdout: string;
-  try {
-    ({ stdout } = await execFileAsync(
-      cli,
-      [`vault=${vault.trim()}`, "quickadd:interactive", `id=${choiceId}`],
-      {
-        timeout: 30_000,
-        maxBuffer: 4 * 1024 * 1024,
-      },
-    ));
-  } catch (error) {
-    const failed =
-      error && typeof error === "object" && "stdout" in error
-        ? String((error as { stdout: unknown }).stdout).trim()
-        : "";
-    if (failed) stdout = failed;
-    else
-      throw new ObsidianCliError(
-        `Could not start interactive run: ${error instanceof Error ? error.message : String(error)}`,
-      );
-  }
-
-  let parsed: {
-    ok?: boolean;
-    error?: string;
-    host?: string;
-    port?: number;
-    sessionId?: string;
-    token?: string;
-    choice?: ChoiceRef;
-  };
-  try {
-    parsed = JSON.parse(stdout.trim());
-  } catch {
-    throw new ObsidianCliError(
-      stdout.trim() || "Obsidian returned no output. Is the vault open?",
-    );
-  }
-  if (
-    !parsed.ok ||
-    !parsed.port ||
-    !parsed.sessionId ||
-    !parsed.token ||
-    !parsed.choice
-  ) {
-    throw new ObsidianCliError(
-      parsed.error ??
-        "Interactive run could not be started (needs QuickAdd with the interactive bridge).",
-    );
-  }
-  return {
-    session: {
-      host: parsed.host ?? "127.0.0.1",
-      port: parsed.port,
-      sessionId: parsed.sessionId,
-      token: parsed.token,
-    },
-    choice: parsed.choice,
-  };
 }
 
 function baseUrl(s: InteractiveSession): string {

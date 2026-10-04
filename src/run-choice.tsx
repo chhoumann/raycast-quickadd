@@ -19,17 +19,18 @@ import {
   useCachedPromise,
 } from "@raycast/utils";
 import { useEffect, useRef, useState } from "react";
-import { listChoices, obsidianOpenUrl, runChoice } from "./lib/obsidianCli";
+import {
+  listChoices,
+  obsidianOpenUrl,
+  runChoice,
+  startInteractive,
+} from "./lib/obsidianCli";
 import { choiceIcon } from "./lib/format";
 import {
   InteractiveSessionView,
   type PendingPrompt,
 } from "./interactive-session";
-import {
-  type InteractiveSession,
-  pollSession,
-  startInteractive,
-} from "./lib/interactive";
+import { type InteractiveSession, pollSession } from "./lib/interactive";
 import type { ChoiceSummary, RunResponse } from "./lib/types";
 
 type RunnableChoice = { id: string; name: string };
