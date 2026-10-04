@@ -2,6 +2,15 @@
 
 Run your [QuickAdd](https://github.com/chhoumann/quickadd) choices, captures, and templates from Raycast. This extension is a thin front end over QuickAdd: it does not reimplement anything, it drives the plugin through the official Obsidian CLI so every workflow you already have in your vault is reachable from Raycast.
 
+## Install
+
+- **Raycast Store:** link coming once the extension is published.
+- **From source:**
+
+  ```bash
+  git clone https://github.com/chhoumann/raycast-quickadd && cd raycast-quickadd && pnpm install && pnpm dev
+  ```
+
 ## How it works
 
 Obsidian ships a command-line interface (Settings → General → Command line interface). QuickAdd registers handlers on it. The extension shells out to that CLI and parses the JSON it returns.
@@ -29,11 +38,21 @@ Typing `[[` in a text field opens a searchable list of the vault's notes and ali
 
 ## Requirements
 
-- **QuickAdd >= 2.17.2.** From 2.17.2, `quickadd:interactive` collects a choice's declared inputs as one form. Earlier versions ask for them one prompt at a time, or lack `quickadd:interactive` entirely (before 2.16).
-- **QuickAdd >= 2.20** for **Cancel Run** to stop the run in Obsidian, and for the "Created" and "Added to" finish messages.
-- **QuickAdd >= 2.31** for note pickers that start empty. Older versions keep the first note picked in a note picker.
-- **QuickAdd with `quickadd:suggest`** for `[[` and `#` completion.
-- **Obsidian with the CLI enabled.** The extension starts Obsidian and opens the vault when it is closed.
+| Feature                                                                        | Needs                                                                                                                                    |
+| ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Everything                                                                     | macOS, and Obsidian 1.12 or later (the installer, not only the in-app update) with Settings → General → Command line interface turned on |
+| Quick Capture, Capture Selection                                               | QuickAdd 2.15 or later                                                                                                                   |
+| Run QuickAdd Choice, with a choice's inputs on one form                        | QuickAdd 2.17.2 or later                                                                                                                 |
+| Cancel Run stops the run in Obsidian, "Created" and "Added to" finish messages | QuickAdd 2.20 or later                                                                                                                   |
+| Note pickers that start empty                                                  | QuickAdd 2.31 or later (unreleased as of October 2026)                                                                                   |
+| `[[` and `#` completion                                                        | QuickAdd 2.31 or later (`quickadd:suggest`, unreleased as of October 2026)                                                               |
+
+The extension starts Obsidian and opens the vault when it is closed.
+
+## Limitations
+
+- Templater's own prompts, such as `tp.system.prompt`, open in Obsidian, not in Raycast. When a run waits on one, Raycast offers **Open Obsidian**.
+- `{{selected}}` inside a choice reads the selection in Obsidian's editor, not the text selected on your Mac. Use **Capture Selection** to capture the Mac selection.
 
 ## Preferences
 

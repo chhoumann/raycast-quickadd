@@ -7,17 +7,20 @@
   "author": "christian",
   "categories": ["Productivity", "Applications"],
   "license": "MIT",
+  "platforms": ["macOS"],
   "commands": [
     {
       "name": "run-choice",
       "title": "Run QuickAdd Choice",
       "description": "Browse and run any QuickAdd choice, filling its inputs in Raycast.",
+      "keywords": ["obsidian", "capture", "note", "template", "macro"],
       "mode": "view"
     },
     {
       "name": "quick-capture",
       "title": "Quick Capture",
       "description": "Capture text to your vault through a QuickAdd capture choice without leaving Raycast.",
+      "keywords": ["obsidian", "capture", "note"],
       "mode": "no-view",
       "arguments": [
         {
@@ -42,6 +45,7 @@
       "name": "capture-selection",
       "title": "Capture Selection",
       "description": "Capture the selected text to your vault through a QuickAdd capture choice.",
+      "keywords": ["obsidian", "capture", "note"],
       "mode": "no-view",
       "preferences": [
         {
@@ -81,6 +85,7 @@
     "@types/node": "^24.0.0",
     "@types/react": "^19.0.0",
     "eslint": "^9.0.0",
+    "prettier": "^3.9.4",
     "typescript": "^5.8.0",
     "vitest": "^5.0.3"
   },
