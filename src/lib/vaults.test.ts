@@ -101,13 +101,16 @@ describe("ensureVaultReady", () => {
     open,
     cliEnabled = true,
     emptyAnswers = 0,
+    failedLists = 0,
   }: {
     open: boolean;
     cliEnabled?: boolean;
     emptyAnswers?: number;
+    failedLists?: number;
   }) {
     let clock = 0;
     let polls = 0;
+    let lists = 0;
     const opened: string[] = [];
     const deps: ReadyDeps = {
       registry: { cliEnabled, vaults: [{ path: vault.path, open }] },
@@ -119,6 +122,8 @@ describe("ensureVaultReady", () => {
           polls++;
           return polls > emptyAnswers ? `${vault.path}/\n` : "";
         }
+        lists++;
+        if (lists <= failedLists) return "";
         return JSON.stringify({ ok: true, choices: [{ id: "e2e-text" }] });
       },
       sleep: async (ms) => {
@@ -136,6 +141,15 @@ describe("ensureVaultReady", () => {
       opened: false,
     });
     expect(opened).toEqual([]);
+  });
+
+  it("waits for QuickAdd in an open vault that does not list choices yet", async () => {
+    const { deps, opened } = obsidian({ open: true, failedLists: 2 });
+    await expect(ensureVaultReady(vault, "e2e-text", deps)).resolves.toEqual({
+      ok: true,
+      opened: true,
+    });
+    expect(opened).toEqual(["obsidian://open?vault=e2e-vault"]);
   });
 
   it("opens a closed vault once and waits until QuickAdd answers", async () => {

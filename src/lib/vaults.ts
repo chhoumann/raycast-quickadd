@@ -129,7 +129,9 @@ export async function ensureVaultReady(
     }
   };
 
-  if (entry.open && (await servesVault())) return { ok: true, opened: false };
+  if (entry.open && (await servesVault()) && (await quickAddAnswers())) {
+    return { ok: true, opened: false };
+  }
 
   await deps.open(`obsidian://open?vault=${encodeURIComponent(vault.name)}`);
   const deadline = deps.now() + OPEN_TIMEOUT_MS;
