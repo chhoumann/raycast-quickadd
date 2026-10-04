@@ -6,7 +6,6 @@ import {
   type LaunchProps,
   List,
   Toast,
-  closeMainWindow,
   open,
   popToRoot,
   showHUD,
@@ -26,11 +25,8 @@ import {
   startInteractive,
 } from "./lib/obsidianCli";
 import { choiceIcon } from "./lib/format";
-import {
-  InteractiveSessionView,
-  type PendingPrompt,
-} from "./interactive-session";
-import { type InteractiveSession, pollSession } from "./lib/interactive";
+import { InteractiveSessionView } from "./interactive-session";
+import { type InteractiveSession, nextEvent } from "./lib/interactive";
 import type { ChoiceSummary, RunResponse } from "./lib/types";
 
 type RunnableChoice = { id: string; name: string };
@@ -91,19 +87,13 @@ function ChoiceList() {
 }
 
 /**
- * Opens one choice directly (used when launched from a pinned Quicklink). Runs it
- * interactively like the list "Run": a prompt-less run just closes with a HUD; a
- * run that raises a prompt hands off to the interactive session view.
+ * Opens one choice directly (used when launched from a pinned Quicklink). The
+ * session view shows the run from the start and closes the window with a HUD.
  */
 function DirectChoice({ choiceId }: { choiceId: string }) {
   const [view, setView] = useState<
     | { phase: "loading" }
-    | {
-        phase: "attach";
-        session: InteractiveSession;
-        choiceName: string;
-        initialPrompt: PendingPrompt;
-      }
+    | { phase: "attach"; session: InteractiveSession; choiceName: string }
     | { phase: "error"; message: string }
   >({ phase: "loading" });
   // Raycast double-invokes effects (StrictMode); without the ref the choice
@@ -112,75 +102,39 @@ function DirectChoice({ choiceId }: { choiceId: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    const abort = new AbortController();
-
-    (async () => {
-      try {
-        startRef.current ??= startInteractive(choiceId);
-        const { session, choice } = await startRef.current;
-        const choiceName = choice.name;
+    startRef.current ??= startInteractive(choiceId);
+    startRef.current.then(
+      ({ session, choice }) => {
+        if (!cancelled)
+          setView({ phase: "attach", session, choiceName: choice.name });
+      },
+      (error) => {
         if (cancelled) return;
-
-        // Pre-poll until the run either raises a prompt or finishes.
-        while (!cancelled) {
-          const event = await pollSession(session, abort.signal);
-          if (cancelled) return;
-          if (event.kind === "idle") continue;
-          if (event.kind === "prompt") {
-            setView({
-              phase: "attach",
-              session,
-              choiceName,
-              initialPrompt: {
-                requestId: event.requestId,
-                prompt: event.prompt,
-              },
-            });
-            return;
-          }
-          if (event.kind === "done") {
-            const result = (event.result ?? {}) as {
-              ok?: boolean;
-              error?: string;
-              file?: string;
-            };
-            if (result.ok === false) {
-              throw new Error(result.error ?? "Choice execution failed");
-            }
-            await showHUD(
-              result.file
-                ? `Ran ${choiceName} → ${result.file}`
-                : `Ran ${choiceName}`,
-            );
-            await closeMainWindow();
-            return;
-          }
-          if (event.kind === "error") {
-            throw new Error(event.error);
-          }
-        }
-      } catch (e) {
-        if (!cancelled) {
-          const message = e instanceof Error ? e.message : String(e);
-          setView({ phase: "error", message });
-          await showFailureToast(e, { title: "Could not run choice" });
-        }
-      }
-    })();
-
+        setView({
+          phase: "error",
+          message: error instanceof Error ? error.message : String(error),
+        });
+        void showFailureToast(error, { title: "Could not run choice" });
+      },
+    );
     return () => {
       cancelled = true;
-      abort.abort();
     };
   }, [choiceId]);
 
   if (view.phase === "attach") {
+    const { choiceName } = view;
     return (
       <InteractiveSessionView
         session={view.session}
-        choiceName={view.choiceName}
-        initialPrompt={view.initialPrompt}
-        onFinish={() => void closeMainWindow()}
+        choiceName={choiceName}
+        onEnd={(end) =>
+          void showHUD(
+            end.state === "done"
+              ? doneToast(choiceName, end.result).title
+              : "Cancelled",
+          )
+        }
       />
     );
   }
@@ -217,11 +171,10 @@ function groupByParent(
 }
 
 function ChoiceItem({ choice }: { choice: ChoiceSummary }) {
-  const { push } = useNavigation();
+  const { push, pop } = useNavigation();
 
-  // Default run: drive the choice interactively, but stay on the list until a
-  // prompt actually appears. We pre-poll here and only open the session view
-  // once the run raises a prompt; a prompt-less run just reports via a toast.
+  // Stay on the list until a prompt actually appears, so a prompt-less run
+  // just reports via a toast.
   async function runInteractive() {
     const toast = await showToast({
       style: Toast.Style.Animated,
@@ -229,32 +182,28 @@ function ChoiceItem({ choice }: { choice: ChoiceSummary }) {
     });
     try {
       const { session } = await startInteractive(choice.id);
-      const abort = new AbortController();
-      while (true) {
-        const event = await pollSession(session, abort.signal);
-        if (event.kind === "idle") continue;
-        if (event.kind === "prompt") {
-          await toast.hide();
-          push(
-            <InteractiveSessionView
-              session={session}
-              choiceName={choice.name}
-              initialPrompt={{
-                requestId: event.requestId,
-                prompt: event.prompt,
-              }}
-            />,
-          );
-          return;
-        }
-        if (event.kind === "done") {
-          await reportInteractiveDone(toast, choice, event.result);
-          return;
-        }
-        if (event.kind === "error") {
-          throw new Error(event.error);
-        }
+      const event = await nextEvent(session);
+      if (event.kind === "error") throw new Error(event.error);
+      await toast.hide();
+      if (event.kind === "done") {
+        await showToast(doneToast(choice.name, event.result));
+        return;
       }
+      push(
+        <InteractiveSessionView
+          session={session}
+          choiceName={choice.name}
+          initialPrompt={{ requestId: event.requestId, prompt: event.prompt }}
+          onEnd={(end) => {
+            pop();
+            void showToast(
+              end.state === "done"
+                ? doneToast(choice.name, end.result)
+                : { style: Toast.Style.Success, title: "Cancelled" },
+            );
+          }}
+        />,
+      );
     } catch (error) {
       await toast.hide();
       await showFailureToast(error, { title: `Could not run ${choice.name}` });
@@ -316,26 +265,19 @@ function ChoiceItem({ choice }: { choice: ChoiceSummary }) {
   );
 }
 
-/** Report a prompt-less interactive run's `done` event (we never left the list). */
-async function reportInteractiveDone(
-  toast: Toast,
-  choice: RunnableChoice,
-  result: unknown,
-) {
-  const r = (result ?? {}) as { ok?: boolean; error?: string; file?: string };
-  if (r.ok === false) {
-    throw new Error(r.error ?? "Choice execution failed");
-  }
-  toast.style = Toast.Style.Success;
-  toast.title = `Ran ${choice.name}`;
-  if (r.file) {
-    const file = r.file;
-    toast.message = file;
-    toast.primaryAction = {
-      title: "Open in Obsidian",
-      onAction: () => open(obsidianOpenUrl(file)),
-    };
-  }
+function doneToast(choiceName: string, result: unknown): Toast.Options {
+  const { file } = (result ?? {}) as { file?: string };
+  return {
+    style: Toast.Style.Success,
+    title: `Ran ${choiceName}`,
+    message: file,
+    primaryAction: file
+      ? {
+          title: "Open in Obsidian",
+          onAction: () => open(obsidianOpenUrl(file)),
+        }
+      : undefined,
+  };
 }
 
 async function reportRunResult(

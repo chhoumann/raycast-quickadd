@@ -35,6 +35,10 @@ A few CLI behaviors the client (`src/lib/obsidianCli.ts`) normalizes:
 4. Each prompt renders as a native control, and the answer goes back through `/reply`. QuickAdd collects a choice's declared inputs first, as one `form` prompt. Prompts that a macro script raises later arrive one at a time.
 5. The `done` event names the created file for **Open in Obsidian**.
 
+A pinned Quicklink opens the run's view at once instead of waiting on the list.
+
+**Cancel Run**, or leaving the run's view while the run is live, posts `/abort`. QuickAdd rejects the open prompt and every prompt the run raises later, so a run that is mid-work stops at its next prompt. The extension never aborts a run that has ended. `driveSession` in `src/lib/interactive.ts` holds the run's state (connecting, prompt, working, done, failed, cancelled) and owns these rules, so they are unit tested without Raycast.
+
 Polling continues while a prompt is open. The poll is the server's only sign that Raycast is still there, so it can tell a slow user from a client that went away.
 
 ## One renderer for every form
@@ -53,6 +57,8 @@ Form item ids are positional (`field-0`), not field ids, because QuickAdd field 
 ## Version requirement
 
 **Run** needs **QuickAdd >= 2.17.2**. `quickadd:interactive` exists from 2.16, and from 2.17.2 it collects a choice's declared inputs as one form even when QuickAdd's one-page input setting is off. Before that, the inputs arrive one prompt at a time.
+
+**Cancel Run** stops the run in Obsidian only with **QuickAdd >= 2.20**, which added `/abort`.
 
 The `verify` flag that **Run in Obsidian** and Quick Capture pass needs **QuickAdd >= 2.14**. Older versions ignore it, and some captures can report success without writing.
 
