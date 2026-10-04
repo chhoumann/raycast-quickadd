@@ -16,7 +16,6 @@ afterEach(() => {
   server?.close();
 });
 
-/** A prompt server that hands out `events` in order, then idles. */
 async function promptServer(events: object[]) {
   const requests: string[] = [];
   server = createServer(async (req, res) => {
@@ -75,7 +74,7 @@ describe("driveSession", () => {
     driver.answer(true);
     await vi.waitFor(() => expect(requests).toContain("POST /reply"));
 
-    driver.dispose();
+    driver.cancelQuietly();
 
     await vi.waitFor(() => expect(requests).toContain("POST /abort"));
   });
@@ -100,7 +99,7 @@ describe("driveSession", () => {
         },
       ]),
     );
-    driver.dispose();
+    driver.cancelQuietly();
   });
 
   it("sends no abort after the run is done", async () => {
@@ -113,7 +112,7 @@ describe("driveSession", () => {
     );
 
     driver.cancel();
-    driver.dispose();
+    driver.cancelQuietly();
 
     await new Promise((resolve) => setTimeout(resolve, 100));
     expect(requests).toEqual(["GET /poll"]);

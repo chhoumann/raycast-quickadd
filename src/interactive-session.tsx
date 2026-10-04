@@ -81,7 +81,7 @@ export function InteractiveSessionView({
     });
     return () => {
       clearTimeout(timer);
-      driver?.dispose();
+      driver?.cancelQuietly();
     };
   }, [session]);
 

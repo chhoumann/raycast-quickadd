@@ -125,7 +125,6 @@ export interface PendingPrompt {
   prompt: PromptSpec;
 }
 
-/** Where one run stands. `cancelled` is reached only through the user's cancel. */
 export type SessionState =
   | { state: "connecting" }
   | { state: "prompt"; pending: PendingPrompt }
@@ -138,10 +137,8 @@ export type SessionEnd = Extract<SessionState, { state: "done" | "cancelled" }>;
 
 export interface SessionDriver {
   answer(value: ReplyValue): void;
-  /** The user's cancel: stops the run in Obsidian and moves to `cancelled`. */
   cancel(): void;
-  /** Stops the run in Obsidian if it is still live, without reporting a state. */
-  dispose(): void;
+  cancelQuietly(): void;
 }
 
 export function doneMessage(
@@ -157,7 +154,6 @@ function url(s: InteractiveSession, path: string): string {
   return `http://${s.host}:${s.port}${path}?session=${encodeURIComponent(s.sessionId)}&token=${encodeURIComponent(s.token)}`;
 }
 
-/** Long-poll until the run raises a prompt or ends, skipping idle keepalives. */
 export async function nextEvent(
   s: InteractiveSession,
   signal?: AbortSignal,
@@ -203,10 +199,7 @@ async function abortSession(s: InteractiveSession): Promise<void> {
   await fetch(url(s, "/abort"), { method: "POST" });
 }
 
-/**
- * Polls the run and tracks its state until it ends. Polling continues while a
- * prompt is open: it is the server's only sign that the client is still there.
- */
+/** Polling continues while a prompt is open: it is the server's only sign that the client is still there. */
 export function driveSession(
   session: InteractiveSession,
   {
@@ -269,6 +262,6 @@ export function driveSession(
       replyToPrompt(session, requestId, value).catch(fail);
     },
     cancel: () => stop(true),
-    dispose: () => stop(false),
+    cancelQuietly: () => stop(false),
   };
 }
