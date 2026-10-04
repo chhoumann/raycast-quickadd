@@ -27,11 +27,11 @@ The form renders each input from the field metadata QuickAdd sends. To get a lar
 - **QuickAdd >= 2.17.2.** From 2.17.2, `quickadd:interactive` collects a choice's declared inputs as one form. Earlier versions ask for them one prompt at a time, or lack `quickadd:interactive` entirely (before 2.16).
 - **QuickAdd >= 2.20** for **Cancel Run** to stop the run in Obsidian, and for the "Created" and "Added to" finish messages.
 - **QuickAdd >= 2.31** for note pickers that start empty. Older versions keep the first note picked in a note picker.
-- **Obsidian with the CLI enabled**, and the target vault open (the CLI talks to the running app).
+- **Obsidian with the CLI enabled.** The extension starts Obsidian and opens the vault when it is closed.
 
 ## Preferences
 
-- **Vault Name** - the vault QuickAdd runs against (as shown in Obsidian's vault switcher).
+- **Vault** - the vault folder QuickAdd runs in. Leave it empty and the extension uses the one vault with QuickAdd enabled, or lists them when several have it. Quick Capture needs it set when several vaults have QuickAdd.
 - **Obsidian CLI Path** - optional; auto-detected at `/opt/homebrew/bin/obsidian`, `/usr/local/bin/obsidian`, or inside `Obsidian.app`.
 - **Quick Capture → Capture Choice** - the capture choice text is sent to. Pick one that works headlessly (a capture whose target file/heading exists, or that creates them).
 
@@ -53,6 +53,6 @@ pnpm test     # unit tests for field parsing and validation
 2. Open `e2e-vault/` in Obsidian with **Open folder as vault**, and turn on community plugins when Obsidian asks.
 3. Run `pnpm e2e:protocol`. The script runs every choice through `quickadd:interactive`, answers each prompt with replies built by `readField`, and checks the notes QuickAdd writes to `e2e-vault/Output/`. It also aborts a slow macro mid-work and checks that it stops at its next prompt, and checks that `/abort` after a finished run changes nothing.
 
-To see the forms in Raycast, set the extension's **Vault Name** to `e2e-vault` and open a choice through its deeplink.
+To see the forms in Raycast, open a choice through a deeplink whose context names the e2e vault, for example `raycast://extensions/christian/quickadd/run-choice?context=` followed by the URL-encoded `{"vaultPath":"<repo>/e2e-vault","choiceId":"e2e-text"}`.
 
 See [`ARCHITECTURE.md`](ARCHITECTURE.md) for how the extension talks to QuickAdd and why.

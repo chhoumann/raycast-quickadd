@@ -41,12 +41,11 @@
   ],
   "preferences": [
     {
-      "name": "vault",
-      "type": "textfield",
-      "required": true,
-      "title": "Vault Name",
-      "placeholder": "My Vault",
-      "description": "Name of the Obsidian vault QuickAdd runs against (as shown in Obsidian's vault switcher)."
+      "name": "vaultPath",
+      "type": "directory",
+      "required": false,
+      "title": "Vault",
+      "description": "Leave empty to detect."
     },
     {
       "name": "cliPath",

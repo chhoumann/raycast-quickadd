@@ -27,6 +27,18 @@ A few CLI behaviors the client (`src/lib/obsidianCli.ts`) normalizes:
 - The CLI exits `0` on plugin-level errors and prints `{ok:false, error}` on stdout; it exits non-zero on aborted runs but still prints that JSON envelope. Transport failures (`Vault not found.`, Obsidian not running) are plain text. The client parses JSON from both the success and failure paths and only throws for genuine transport errors.
 - Choice enumeration goes through `quickadd:list`, never by reading `data.json`. The plugin owns flattening and runnability; duplicating that in the client would break on schema changes.
 
+## Which vault
+
+The CLI and `obsidian://` URIs address a vault by name, the basename of its folder. `src/lib/vaults.ts` reads Obsidian's vault list (`~/Library/Application Support/obsidian/obsidian.json`) and picks the vault in this order:
+
+1. The `vaultPath` in the launch context. Quicklinks carry it, so a pinned choice always runs in the vault it came from.
+2. The **Vault** preference.
+3. The only registered vault with QuickAdd installed and enabled. When several have it, **Run QuickAdd Choice** lists them, and Quick Capture asks for the preference.
+
+The extension refuses a vault whose name another registered vault shares, because the CLI could reach the wrong one.
+
+Before it runs anything, `ensureVaultReady` checks that Obsidian serves the vault (`vault info=path` answers with its path). If not, it opens `obsidian://open?vault=<name>` once, which also starts Obsidian, and polls every 500 ms for up to 20 seconds until the vault answers and `quickadd:list` lists the choice. Opening a vault brings Obsidian to the front, so **Run QuickAdd Choice** then reopens itself through its own deeplink to bring Raycast back. A `relaunched` flag in that deeplink stops it from doing so twice.
+
 ## Per-choice flow: one interactive run
 
 1. `quickadd:list` fills the searchable list, grouped by Multi folder.
