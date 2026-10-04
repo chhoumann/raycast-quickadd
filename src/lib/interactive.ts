@@ -1,3 +1,4 @@
+import { setTimeout as sleep } from "node:timers/promises";
 import type { ChoiceEffect } from "./types";
 
 export interface SuggesterItem {
@@ -108,7 +109,6 @@ export type SessionEvent =
 
 export type RunEvent = Exclude<SessionEvent, { kind: "idle" }>;
 
-/** The poll response as QuickAdd sends it: its prompt types are an open set. */
 type WireEvent =
   | Exclude<SessionEvent, { kind: "prompt" }>
   | { kind: "prompt"; requestId: string; prompt: WirePrompt };
@@ -134,6 +134,17 @@ export type SessionState =
   | { state: "cancelled" };
 
 export type SessionEnd = Extract<SessionState, { state: "done" | "cancelled" }>;
+
+/** How a caller that started polling hands the run to the session view. */
+export type Handoff =
+  | { kind: "prompt"; pending: PendingPrompt }
+  | { kind: "poll"; next: Promise<RunEvent> };
+
+export function initialState(handoff?: Handoff): SessionState {
+  return handoff?.kind === "prompt"
+    ? { state: "prompt", pending: handoff.pending }
+    : { state: "connecting" };
+}
 
 export interface SessionDriver {
   answer(value: ReplyValue): void;
@@ -179,6 +190,19 @@ export async function nextEvent(
   }
 }
 
+/** The run's end if it comes within `ms`, otherwise what to hand to the session view. */
+export async function firstEvent(
+  s: InteractiveSession,
+  ms: number,
+): Promise<Exclude<RunEvent, { kind: "prompt" }> | Handoff> {
+  const next = nextEvent(s);
+  const event = await Promise.race([next, sleep(ms, undefined)]);
+  if (!event) return { kind: "poll", next };
+  if (event.kind !== "prompt") return event;
+  const { requestId, prompt } = event;
+  return { kind: "prompt", pending: { requestId, prompt } };
+}
+
 async function replyToPrompt(
   s: InteractiveSession,
   requestId: string,
@@ -203,17 +227,11 @@ async function abortSession(s: InteractiveSession): Promise<void> {
 export function driveSession(
   session: InteractiveSession,
   {
-    initial,
-    next,
+    handoff,
     onChange,
-  }: {
-    initial: SessionState;
-    /** A poll the caller already has in flight; the driver takes it over. */
-    next?: Promise<RunEvent>;
-    onChange: (state: SessionState) => void;
-  },
+  }: { handoff?: Handoff; onChange: (state: SessionState) => void },
 ): SessionDriver {
-  let current = initial;
+  let current = initialState(handoff);
   const polls = new AbortController();
   const isLive = () =>
     current.state === "connecting" ||
@@ -238,7 +256,10 @@ export function driveSession(
   };
 
   void (async () => {
-    let pending = next ?? nextEvent(session, polls.signal);
+    let pending =
+      handoff?.kind === "poll"
+        ? handoff.next
+        : nextEvent(session, polls.signal);
     for (;;) {
       const event = await pending;
       if (event.kind === "prompt") {

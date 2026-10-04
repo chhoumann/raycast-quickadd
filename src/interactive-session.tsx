@@ -18,42 +18,34 @@ import {
   readField,
 } from "./lib/fields";
 import {
+  type Handoff,
   type InteractiveSession,
   type PendingPrompt,
   type PromptSpec,
   type ReplyValue,
-  type RunEvent,
   type SessionDriver,
   type SessionEnd,
   type SessionState,
   driveSession,
+  initialState,
 } from "./lib/interactive";
 import { obsidianOpenUrl } from "./lib/obsidianCli";
 
-/** How long a run may wait with no prompt before the view suggests it is waiting inside Obsidian. */
 export const STALL_MS = 3000;
 
 export function InteractiveSessionView({
   choiceName,
   session,
-  initialPrompt,
-  next,
+  handoff,
   onEnd,
 }: {
   choiceName: string;
   session: InteractiveSession;
-  /** A prompt the caller already took off the wire; without it the view starts connecting. */
-  initialPrompt?: PendingPrompt;
-  /** A poll the caller already has in flight after waiting STALL_MS for it. */
-  next?: Promise<RunEvent>;
+  handoff?: Handoff;
   onEnd: (end: SessionEnd) => void;
 }) {
-  const [phase, setPhase] = useState<SessionState>(
-    initialPrompt
-      ? { state: "prompt", pending: initialPrompt }
-      : { state: "connecting" },
-  );
-  const [stalled, setStalled] = useState(next !== undefined);
+  const [phase, setPhase] = useState(() => initialState(handoff));
+  const [stalled, setStalled] = useState(handoff?.kind === "poll");
   const driverRef = useRef<SessionDriver | null>(null);
 
   useEffect(() => {
@@ -62,8 +54,7 @@ export function InteractiveSessionView({
     // throwaway first mount's cleanup from aborting the run.
     const timer = setTimeout(() => {
       driver = driveSession(session, {
-        initial: phase,
-        next,
+        handoff,
         onChange: (state) => {
           setPhase(state);
           setStalled(false);
@@ -108,9 +99,22 @@ export function InteractiveSessionView({
 
   return (
     <List
-      isLoading={waiting}
+      isLoading={waiting && !stalled}
       navigationTitle={choiceName}
       searchBarPlaceholder={`Running ${choiceName}...`}
+      actions={
+        waiting ? (
+          <ActionPanel>
+            <Action
+              title="Open Obsidian"
+              icon={Icon.AppWindow}
+              shortcut={Keyboard.Shortcut.Common.Open}
+              onAction={() => open(obsidianOpenUrl())}
+            />
+            <CancelAction onCancel={onCancel} />
+          </ActionPanel>
+        ) : undefined
+      }
     >
       <List.EmptyView
         icon={phase.state === "failed" ? Icon.ExclamationMark : Icon.Wand}
@@ -121,19 +125,6 @@ export function InteractiveSessionView({
             : waiting && stalled
               ? "QuickAdd may be asking something in Obsidian, such as a Templater prompt."
               : undefined
-        }
-        actions={
-          waiting ? (
-            <ActionPanel>
-              <Action
-                title="Open Obsidian"
-                icon={Icon.AppWindow}
-                shortcut={Keyboard.Shortcut.Common.Open}
-                onAction={() => open(obsidianOpenUrl())}
-              />
-              <CancelAction onCancel={onCancel} />
-            </ActionPanel>
-          ) : undefined
         }
       />
     </List>

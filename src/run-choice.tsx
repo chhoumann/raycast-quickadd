@@ -19,7 +19,6 @@ import {
   useCachedState,
   useFrecencySorting,
 } from "@raycast/utils";
-import { setTimeout as sleep } from "node:timers/promises";
 import { useEffect, useRef, useState } from "react";
 import {
   listChoices,
@@ -33,7 +32,7 @@ import {
   type DoneResult,
   type InteractiveSession,
   doneMessage,
-  nextEvent,
+  firstEvent,
 } from "./lib/interactive";
 import type { ChoiceSummary } from "./lib/types";
 
@@ -205,9 +204,6 @@ function ChoiceItem({
 }) {
   const { push, pop } = useNavigation();
 
-  // Stay on the list until a prompt appears, so a prompt-less run just reports
-  // via a toast. A run that raises nothing for STALL_MS hands its poll to the
-  // session view, which can point the user at Obsidian.
   async function runInteractive() {
     onRun(choice);
     const toast = await showToast({
@@ -216,22 +212,18 @@ function ChoiceItem({
     });
     try {
       const { session } = await startInteractive(choice.id);
-      const next = nextEvent(session);
-      const event = await Promise.race([next, sleep(STALL_MS, undefined)]);
-      if (event?.kind === "error") throw new Error(event.error);
+      const first = await firstEvent(session, STALL_MS);
+      if (first.kind === "error") throw new Error(first.error);
       await toast.hide();
-      if (event?.kind === "done") {
-        await showToast(doneToast(choice.name, event.result));
+      if (first.kind === "done") {
+        await showToast(doneToast(choice.name, first.result));
         return;
       }
       push(
         <InteractiveSessionView
           session={session}
           choiceName={choice.name}
-          initialPrompt={
-            event && { requestId: event.requestId, prompt: event.prompt }
-          }
-          next={event ? undefined : next}
+          handoff={first}
           onEnd={(end) => {
             pop();
             void showToast(

@@ -2,7 +2,7 @@
 
 export type ChoiceType = "Template" | "Capture" | "Macro" | "Multi";
 
-/** What a run did to its file. Sent by QuickAdd >= 2.20. */
+/** Sent by QuickAdd >= 2.20. */
 export type ChoiceEffect = "created" | "changed" | "unchanged" | "unknown";
 
 export interface ChoiceSummary {

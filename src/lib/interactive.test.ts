@@ -3,10 +3,12 @@ import type { AddressInfo } from "node:net";
 import { text } from "node:stream/consumers";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  type Handoff,
   type InteractiveSession,
   type SessionState,
   doneMessage,
   driveSession,
+  firstEvent,
 } from "./interactive";
 
 let server: Server | undefined;
@@ -16,8 +18,10 @@ afterEach(() => {
   server?.close();
 });
 
-async function promptServer(events: object[]) {
+/** Like QuickAdd's server, one poll parks at a time and a second one gets an idle at once. */
+async function promptServer(queue: object[] = []) {
   const requests: string[] = [];
+  let parked: ((event: object) => void) | null = null;
   server = createServer(async (req, res) => {
     await text(req);
     const path = new URL(req.url ?? "/", "http://127.0.0.1").pathname;
@@ -27,9 +31,16 @@ async function promptServer(events: object[]) {
       res.end(JSON.stringify(body));
     };
     if (path !== "/poll") return send({ ok: true, interrupted: 0 });
-    const event = events.shift();
-    if (event) send(event);
-    else setTimeout(() => send({ kind: "idle" }), 20);
+    const event = queue.shift();
+    if (event) return send(event);
+    if (parked) return send({ kind: "idle" });
+    const waiter = (body: object) => {
+      clearTimeout(keepalive);
+      if (parked === waiter) parked = null;
+      send(body);
+    };
+    const keepalive = setTimeout(() => waiter({ kind: "idle" }), 200);
+    parked = waiter;
   });
   await new Promise<void>((resolve) => server?.listen(0, "127.0.0.1", resolve));
   const session: InteractiveSession = {
@@ -38,13 +49,14 @@ async function promptServer(events: object[]) {
     sessionId: "s",
     token: "t",
   };
-  return { session, requests };
+  const emit = (event: object) => (parked ? parked(event) : queue.push(event));
+  return { session, requests, emit };
 }
 
-function drive(session: InteractiveSession, initial: SessionState) {
+function drive(session: InteractiveSession, handoff?: Handoff) {
   const states: SessionState[] = [];
   const driver = driveSession(session, {
-    initial,
+    handoff,
     onChange: (state) => states.push(state),
   });
   return { driver, states };
@@ -52,8 +64,8 @@ function drive(session: InteractiveSession, initial: SessionState) {
 
 describe("driveSession", () => {
   it("aborts the run when the user cancels while no prompt is open", async () => {
-    const { session, requests } = await promptServer([]);
-    const { driver, states } = drive(session, { state: "connecting" });
+    const { session, requests } = await promptServer();
+    const { driver, states } = drive(session);
     await vi.waitFor(() => expect(requests).toContain("GET /poll"));
 
     driver.cancel();
@@ -63,9 +75,9 @@ describe("driveSession", () => {
   });
 
   it("aborts the run when the view goes away mid-work", async () => {
-    const { session, requests } = await promptServer([]);
+    const { session, requests } = await promptServer();
     const { driver } = drive(session, {
-      state: "prompt",
+      kind: "prompt",
       pending: {
         requestId: "r1",
         prompt: { type: "confirm", header: "Proceed?" },
@@ -87,7 +99,7 @@ describe("driveSession", () => {
         prompt: { type: "color", header: "Pick a color" },
       },
     ]);
-    const { driver, states } = drive(session, { state: "connecting" });
+    const { driver, states } = drive(session);
     await vi.waitFor(() =>
       expect(states).toEqual([
         {
@@ -102,11 +114,38 @@ describe("driveSession", () => {
     driver.cancelQuietly();
   });
 
+  it("takes over the poll of a run that raised nothing in time", async () => {
+    const { session, emit } = await promptServer();
+    const first = await firstEvent(session, 50);
+    if (first.kind !== "poll")
+      throw new Error(`expected a poll, got ${first.kind}`);
+
+    emit({
+      kind: "prompt",
+      requestId: "r1",
+      prompt: { type: "confirm", header: "Proceed?" },
+    });
+    const { driver, states } = drive(session, first);
+
+    await vi.waitFor(() =>
+      expect(states).toEqual([
+        {
+          state: "prompt",
+          pending: {
+            requestId: "r1",
+            prompt: { type: "confirm", header: "Proceed?" },
+          },
+        },
+      ]),
+    );
+    driver.cancelQuietly();
+  });
+
   it("sends no abort after the run is done", async () => {
     const { session, requests } = await promptServer([
       { kind: "done", result: { ok: true } },
     ]);
-    const { driver, states } = drive(session, { state: "connecting" });
+    const { driver, states } = drive(session);
     await vi.waitFor(() =>
       expect(states).toEqual([{ state: "done", result: { ok: true } }]),
     );
