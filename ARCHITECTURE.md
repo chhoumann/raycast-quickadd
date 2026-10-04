@@ -8,7 +8,7 @@ Obsidian ships a command-line interface (Settings → General → Command line i
 
 - `quickadd:list [type=...] [commands]` - the flattened choice tree: `id`, `name`, `type`, `path` (`Multi / child`), `command`, `runnable` (a Multi is a folder, not runnable).
 - `quickadd:interactive id=<id> [vars=<json>]` - starts a choice and returns at once with the choice (`id`, `name`, `type`) and the address of a local prompt server (`host`, `port`, `sessionId`, `token`). QuickAdd then sends each prompt to that server instead of opening a modal.
-- `quickadd:run choice=<name>|id=<id> [vars=<json>] [ui] [verify]` - runs a choice to completion. **Run in Obsidian** passes `ui` so QuickAdd prompts inside the app. Quick Capture passes its text through `vars`. `verify` returns the created file path and an honest success or failure for Template and Capture choices.
+- `quickadd:run choice=<name>|id=<id> [vars=<json>] [ui] [verify]` - runs a choice to completion. **Run in Obsidian** passes `ui` so QuickAdd prompts inside the app. Quick Capture and Capture Selection pass their text through `vars`. `verify` returns the created file path and an honest success or failure for Template and Capture choices.
 - `quickadd:suggest kind=links|tags` - completion items for text fields. `links` returns one item per note, attachment, and alias, each with `text` (what goes inside `[[...]]`) and `path`, plus `alias` on alias items. `tags` returns each tag without its `#` and its `count`, most used first. The CLI does no filtering; Raycast's `List` filters as the user types.
 
 The extension shells out with `execFile` (each argument is a separate argv entry, so no shell quoting is needed for values with spaces or newlines) and parses the JSON envelope.
@@ -32,9 +32,9 @@ A few CLI behaviors the client (`src/lib/obsidianCli.ts`) normalizes:
 
 The CLI and `obsidian://` URIs address a vault by name, the basename of its folder. `src/lib/vaults.ts` reads Obsidian's vault list (`~/Library/Application Support/obsidian/obsidian.json`) and picks the vault in this order:
 
-1. The `vaultPath` in the launch context. Quicklinks carry it, so a pinned choice always runs in the vault it came from.
+1. The `vaultPath` in the launch context. Quicklinks carry it, so a pinned choice always runs in the vault it came from. The capture commands read it too.
 2. The **Vault** preference.
-3. The only registered vault with QuickAdd installed and enabled. When several have it, **Run QuickAdd Choice** lists them, and Quick Capture asks for the preference.
+3. The only registered vault with QuickAdd installed and enabled. When several have it, **Run QuickAdd Choice** lists them, and the capture commands ask for the preference.
 
 The extension refuses a vault whose name another registered vault shares, because the CLI could reach the wrong one.
 
@@ -77,7 +77,7 @@ Form item ids are positional (`field-0`), not field ids, because QuickAdd field 
 
 **QuickAdd >= 2.20** added `/abort` and the `effect` field. Before it, **Cancel Run** does not stop the run in Obsidian, and the finish message always reads "Ran <choice>".
 
-The `verify` flag that **Run in Obsidian** and Quick Capture pass needs **QuickAdd >= 2.14**. Older versions ignore it, and some captures can report success without writing.
+The `verify` flag that **Run in Obsidian** and the capture commands pass needs **QuickAdd >= 2.14**. Older versions ignore it, and some captures can report success without writing.
 
 `[[` and `#` completion needs **QuickAdd with `quickadd:suggest`**, which is not released yet. Without it, the picker shows the CLI's error.
 

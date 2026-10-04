@@ -17,6 +17,7 @@ Obsidian ships a command-line interface (Settings → General → Command line i
 
 - **Run QuickAdd Choice** - browse every runnable choice, run it, and answer its prompts in Raycast. Up to five choices you ran often and recently sit in a **Recent** section at the top. Choices that Obsidian flags as commands are marked, and any choice can be **pinned as a Quicklink** (⌘K → Pin as Quicklink) so it becomes root-searchable and hotkey-able in Raycast.
 - **Quick Capture** - a no-view command that sends its text argument to a capture choice of your choosing (set per-command in preferences). Bind it to a hotkey for frictionless capture.
+- **Capture Selection** - a no-view command that sends the text selected in the frontmost app to a capture choice, set per-command like Quick Capture's.
 
 ### Multi-line input, driven by the vault
 
@@ -36,9 +37,9 @@ Typing `[[` in a text field opens a searchable list of the vault's notes and ali
 
 ## Preferences
 
-- **Vault** - the vault folder QuickAdd runs in. Leave it empty and the extension uses the one vault with QuickAdd enabled, or lists them when several have it. Quick Capture needs it set when several vaults have QuickAdd.
+- **Vault** - the vault folder QuickAdd runs in. Leave it empty and the extension uses the one vault with QuickAdd enabled, or lists them when several have it. Quick Capture and Capture Selection need it set when several vaults have QuickAdd.
 - **Obsidian CLI Path** - optional; auto-detected at `/opt/homebrew/bin/obsidian`, `/usr/local/bin/obsidian`, or inside `Obsidian.app`.
-- **Quick Capture → Capture Choice** - the capture choice text is sent to. Pick one that works headlessly (a capture whose target file/heading exists, or that creates them).
+- **Quick Capture → Capture Choice** and **Capture Selection → Capture Choice** - the capture choice text is sent to. Pick one that works headlessly (a capture whose target file/heading exists, or that creates them).
 
 ## Development
 

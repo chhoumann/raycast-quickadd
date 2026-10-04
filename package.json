@@ -37,6 +37,22 @@
           "description": "Name of the QuickAdd capture choice to send text to (as shown in Run QuickAdd Choice). Pick one that runs without prompts."
         }
       ]
+    },
+    {
+      "name": "capture-selection",
+      "title": "Capture Selection",
+      "description": "Capture the selected text to your vault through a QuickAdd capture choice.",
+      "mode": "no-view",
+      "preferences": [
+        {
+          "name": "captureChoice",
+          "type": "textfield",
+          "required": true,
+          "title": "Capture Choice",
+          "placeholder": "e.g. Quick Capture",
+          "description": "Name of the QuickAdd capture choice to send text to (as shown in Run QuickAdd Choice). Pick one that runs without prompts."
+        }
+      ]
     }
   ],
   "preferences": [
