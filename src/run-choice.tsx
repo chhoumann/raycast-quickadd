@@ -17,6 +17,7 @@ import {
   showFailureToast,
   useCachedPromise,
 } from "@raycast/utils";
+import { setTimeout as sleep } from "node:timers/promises";
 import { useEffect, useRef, useState } from "react";
 import {
   listChoices,
@@ -25,7 +26,7 @@ import {
   startInteractive,
 } from "./lib/obsidianCli";
 import { choiceIcon } from "./lib/format";
-import { InteractiveSessionView } from "./interactive-session";
+import { STALL_MS, InteractiveSessionView } from "./interactive-session";
 import {
   type DoneResult,
   type InteractiveSession,
@@ -176,8 +177,9 @@ function groupByParent(
 function ChoiceItem({ choice }: { choice: ChoiceSummary }) {
   const { push, pop } = useNavigation();
 
-  // Stay on the list until a prompt actually appears, so a prompt-less run
-  // just reports via a toast.
+  // Stay on the list until a prompt appears, so a prompt-less run just reports
+  // via a toast. A run that raises nothing for STALL_MS hands its poll to the
+  // session view, which can point the user at Obsidian.
   async function runInteractive() {
     const toast = await showToast({
       style: Toast.Style.Animated,
@@ -185,10 +187,11 @@ function ChoiceItem({ choice }: { choice: ChoiceSummary }) {
     });
     try {
       const { session } = await startInteractive(choice.id);
-      const event = await nextEvent(session);
-      if (event.kind === "error") throw new Error(event.error);
+      const next = nextEvent(session);
+      const event = await Promise.race([next, sleep(STALL_MS, undefined)]);
+      if (event?.kind === "error") throw new Error(event.error);
       await toast.hide();
-      if (event.kind === "done") {
+      if (event?.kind === "done") {
         await showToast(doneToast(choice.name, event.result));
         return;
       }
@@ -196,7 +199,10 @@ function ChoiceItem({ choice }: { choice: ChoiceSummary }) {
         <InteractiveSessionView
           session={session}
           choiceName={choice.name}
-          initialPrompt={{ requestId: event.requestId, prompt: event.prompt }}
+          initialPrompt={
+            event && { requestId: event.requestId, prompt: event.prompt }
+          }
+          next={event ? undefined : next}
           onEnd={(end) => {
             pop();
             void showToast(

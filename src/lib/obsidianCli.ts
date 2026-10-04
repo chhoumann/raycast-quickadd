@@ -164,8 +164,9 @@ export async function runChoiceByName(
   });
 }
 
-/** Build an obsidian://open URL for a vault-relative file path. */
-export function obsidianOpenUrl(filePath: string): string {
+/** Build an obsidian://open URL for the vault, or for a vault-relative file in it. */
+export function obsidianOpenUrl(filePath?: string): string {
   const { vault } = getPreferenceValues<Preferences>();
-  return `obsidian://open?vault=${encodeURIComponent(vault.trim())}&file=${encodeURIComponent(filePath)}`;
+  const url = `obsidian://open?vault=${encodeURIComponent(vault.trim())}`;
+  return filePath ? `${url}&file=${encodeURIComponent(filePath)}` : url;
 }

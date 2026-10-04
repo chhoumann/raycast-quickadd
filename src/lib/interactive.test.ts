@@ -32,9 +32,7 @@ async function promptServer(events: object[]) {
     if (event) send(event);
     else setTimeout(() => send({ kind: "idle" }), 20);
   });
-  await new Promise<void>((resolve) =>
-    server?.listen(0, "127.0.0.1", resolve),
-  );
+  await new Promise<void>((resolve) => server?.listen(0, "127.0.0.1", resolve));
   const session: InteractiveSession = {
     host: "127.0.0.1",
     port: (server.address() as AddressInfo).port,

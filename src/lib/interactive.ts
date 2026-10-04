@@ -106,7 +106,7 @@ export type SessionEvent =
   | { kind: "error"; error: string }
   | { kind: "idle" };
 
-type RunEvent = Exclude<SessionEvent, { kind: "idle" }>;
+export type RunEvent = Exclude<SessionEvent, { kind: "idle" }>;
 
 /** The poll response as QuickAdd sends it: its prompt types are an open set. */
 type WireEvent =
@@ -211,8 +211,14 @@ export function driveSession(
   session: InteractiveSession,
   {
     initial,
+    next,
     onChange,
-  }: { initial: SessionState; onChange: (state: SessionState) => void },
+  }: {
+    initial: SessionState;
+    /** A poll the caller already has in flight; the driver takes it over. */
+    next?: Promise<RunEvent>;
+    onChange: (state: SessionState) => void;
+  },
 ): SessionDriver {
   let current = initial;
   const polls = new AbortController();
@@ -220,10 +226,10 @@ export function driveSession(
     current.state === "connecting" ||
     current.state === "prompt" ||
     current.state === "working";
-  const enter = (next: SessionState) => {
+  const enter = (state: SessionState) => {
     if (!isLive()) return;
-    current = next;
-    onChange(next);
+    current = state;
+    onChange(state);
   };
   const fail = (error: unknown) =>
     enter({
@@ -239,8 +245,9 @@ export function driveSession(
   };
 
   void (async () => {
-    while (isLive()) {
-      const event = await nextEvent(session, polls.signal);
+    let pending = next ?? nextEvent(session, polls.signal);
+    for (;;) {
+      const event = await pending;
       if (event.kind === "prompt") {
         const { requestId, prompt } = event;
         enter({ state: "prompt", pending: { requestId, prompt } });
@@ -249,6 +256,8 @@ export function driveSession(
       } else {
         enter({ state: "failed", message: event.error });
       }
+      if (!isLive()) return;
+      pending = nextEvent(session, polls.signal);
     }
   })().catch(fail);
 

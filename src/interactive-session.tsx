@@ -5,6 +5,8 @@ import {
   Form,
   Icon,
   List,
+  open,
+  Keyboard,
 } from "@raycast/api";
 import { showFailureToast } from "@raycast/utils";
 import { useEffect, useRef, useState } from "react";
@@ -20,22 +22,30 @@ import {
   type PendingPrompt,
   type PromptSpec,
   type ReplyValue,
+  type RunEvent,
   type SessionDriver,
   type SessionEnd,
   type SessionState,
   driveSession,
 } from "./lib/interactive";
+import { obsidianOpenUrl } from "./lib/obsidianCli";
+
+/** How long a run may wait with no prompt before the view suggests it is waiting inside Obsidian. */
+export const STALL_MS = 3000;
 
 export function InteractiveSessionView({
   choiceName,
   session,
   initialPrompt,
+  next,
   onEnd,
 }: {
   choiceName: string;
   session: InteractiveSession;
   /** A prompt the caller already took off the wire; without it the view starts connecting. */
   initialPrompt?: PendingPrompt;
+  /** A poll the caller already has in flight after waiting STALL_MS for it. */
+  next?: Promise<RunEvent>;
   onEnd: (end: SessionEnd) => void;
 }) {
   const [phase, setPhase] = useState<SessionState>(
@@ -43,6 +53,7 @@ export function InteractiveSessionView({
       ? { state: "prompt", pending: initialPrompt }
       : { state: "connecting" },
   );
+  const [stalled, setStalled] = useState(next !== undefined);
   const driverRef = useRef<SessionDriver | null>(null);
 
   useEffect(() => {
@@ -52,11 +63,15 @@ export function InteractiveSessionView({
     const timer = setTimeout(() => {
       driver = driveSession(session, {
         initial: phase,
-        onChange: (next) => {
-          setPhase(next);
-          if (next.state === "done" || next.state === "cancelled") onEnd(next);
-          if (next.state === "failed") {
-            showFailureToast(new Error(next.message), {
+        next,
+        onChange: (state) => {
+          setPhase(state);
+          setStalled(false);
+          if (state.state === "done" || state.state === "cancelled") {
+            onEnd(state);
+          }
+          if (state.state === "failed") {
+            showFailureToast(new Error(state.message), {
               title: `${choiceName} failed`,
             });
           }
@@ -69,6 +84,13 @@ export function InteractiveSessionView({
       driver?.dispose();
     };
   }, [session]);
+
+  const waiting = phase.state === "connecting" || phase.state === "working";
+  useEffect(() => {
+    if (stalled || !waiting) return;
+    const timer = setTimeout(() => setStalled(true), STALL_MS);
+    return () => clearTimeout(timer);
+  }, [phase, stalled]);
 
   const onCancel = () => driverRef.current?.cancel();
 
@@ -84,7 +106,6 @@ export function InteractiveSessionView({
     );
   }
 
-  const waiting = phase.state === "connecting" || phase.state === "working";
   return (
     <List
       isLoading={waiting}
@@ -94,10 +115,22 @@ export function InteractiveSessionView({
       <List.EmptyView
         icon={phase.state === "failed" ? Icon.ExclamationMark : Icon.Wand}
         title={emptyTitle(phase)}
-        description={phase.state === "failed" ? phase.message : undefined}
+        description={
+          phase.state === "failed"
+            ? phase.message
+            : waiting && stalled
+              ? "QuickAdd may be asking something in Obsidian, such as a Templater prompt."
+              : undefined
+        }
         actions={
           waiting ? (
             <ActionPanel>
+              <Action
+                title="Open Obsidian"
+                icon={Icon.AppWindow}
+                shortcut={Keyboard.Shortcut.Common.Open}
+                onAction={() => open(obsidianOpenUrl())}
+              />
               <CancelAction onCancel={onCancel} />
             </ActionPanel>
           ) : undefined
