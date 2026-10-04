@@ -4,7 +4,7 @@
   "title": "QuickAdd for Obsidian",
   "description": "Run QuickAdd choices, captures, and templates in your Obsidian vault straight from Raycast.",
   "icon": "icon.png",
-  "author": "christian",
+  "author": "christian_bager_bach_houmann",
   "categories": ["Productivity", "Applications"],
   "license": "MIT",
   "platforms": ["macOS"],
