@@ -57,7 +57,7 @@ export function resolveCliPath(): string {
  * failures ("Vault not found.", Obsidian not running) are plain text and are
  * thrown as ObsidianCliError.
  */
-async function invoke<T extends { ok: boolean }>(
+export async function invoke<T extends { ok: boolean }>(
   vault: Vault,
   command: string,
   params: Record<string, string | undefined>,
