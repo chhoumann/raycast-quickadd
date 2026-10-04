@@ -1,5 +1,14 @@
-import { Form } from "@raycast/api";
+import { Form, useNavigation } from "@raycast/api";
+import { useRef, useState } from "react";
+import { LinkPicker, TagPicker } from "./completion-pickers";
+import {
+  insertLink,
+  insertTag,
+  linkTriggerAt,
+  tagTriggerAt,
+} from "./lib/completion";
 import type { FieldSpec } from "./lib/fields";
+import type { Vault } from "./lib/vaults";
 
 export function customItemId(id: string): string {
   return `${id}-custom`;
@@ -12,11 +21,13 @@ function parseDate(value: string | undefined): Date | undefined {
 
 export function FieldControl({
   spec,
+  vault,
   id,
   error,
   onChange,
 }: {
   spec: FieldSpec;
+  vault: Vault;
   id: string;
   error?: string;
   onChange: () => void;
@@ -26,19 +37,7 @@ export function FieldControl({
 
   switch (spec.kind) {
     case "text":
-      return spec.multiline ? (
-        <Form.TextArea
-          {...common}
-          placeholder={spec.placeholder}
-          defaultValue={spec.defaultValue}
-        />
-      ) : (
-        <Form.TextField
-          {...common}
-          placeholder={spec.placeholder}
-          defaultValue={spec.defaultValue}
-        />
-      );
+      return <TextControl {...common} spec={spec} vault={vault} />;
     case "number":
       return (
         <Form.TextField
@@ -116,4 +115,70 @@ export function FieldControl({
         </>
       );
   }
+}
+
+function TextControl({
+  spec,
+  vault,
+  onChange,
+  ...item
+}: {
+  spec: Extract<FieldSpec, { kind: "text" }>;
+  vault: Vault;
+  id: string;
+  title: string;
+  info?: string;
+  error?: string;
+  onChange: () => void;
+}) {
+  const [value, setValue] = useState(spec.defaultValue ?? "");
+  const ref = useRef<Form.TextField>(null);
+  const { push, pop } = useNavigation();
+  // Raycast leaves the form unfocused after a pushed view pops.
+  const focus = () => ref.current?.focus();
+
+  function handleChange(next: string) {
+    onChange();
+    setValue(next);
+    const link = linkTriggerAt(value, next);
+    if (link !== undefined) {
+      push(
+        <LinkPicker
+          vault={vault}
+          onClose={focus}
+          onPick={(picked) => {
+            setValue(insertLink(next, link, picked.text));
+            pop();
+          }}
+        />,
+      );
+      return;
+    }
+    const tag = tagTriggerAt(value, next);
+    if (tag !== undefined) {
+      push(
+        <TagPicker
+          vault={vault}
+          onClose={focus}
+          onPick={(picked) => {
+            setValue(insertTag(next, tag, picked.tag));
+            pop();
+          }}
+        />,
+      );
+    }
+  }
+
+  const props = {
+    ...item,
+    ref,
+    placeholder: spec.placeholder,
+    value,
+    onChange: handleChange,
+  };
+  return spec.multiline ? (
+    <Form.TextArea {...props} />
+  ) : (
+    <Form.TextField {...props} />
+  );
 }

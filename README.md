@@ -22,11 +22,16 @@ Obsidian ships a command-line interface (Settings → General → Command line i
 
 The form renders each input from the field metadata QuickAdd sends. To get a large, dictation-friendly text area, declare the value as multi-line in QuickAdd itself - `{{VALUE:label|type:multiline}}`, or a macro user script whose `quickadd.inputs` entry uses `type: "textarea"`. The extension renders whatever the vault describes; there is no bespoke "big field" command to maintain.
 
+### Links and tags
+
+Typing `[[` in a text field opens a searchable list of the vault's notes and aliases. Typing `#` at the start of a word opens the vault's tags, most used first. Picking one inserts the link or tag where you typed. This needs QuickAdd with `quickadd:suggest`.
+
 ## Requirements
 
 - **QuickAdd >= 2.17.2.** From 2.17.2, `quickadd:interactive` collects a choice's declared inputs as one form. Earlier versions ask for them one prompt at a time, or lack `quickadd:interactive` entirely (before 2.16).
 - **QuickAdd >= 2.20** for **Cancel Run** to stop the run in Obsidian, and for the "Created" and "Added to" finish messages.
 - **QuickAdd >= 2.31** for note pickers that start empty. Older versions keep the first note picked in a note picker.
+- **QuickAdd with `quickadd:suggest`** for `[[` and `#` completion.
 - **Obsidian with the CLI enabled.** The extension starts Obsidian and opens the vault when it is closed.
 
 ## Preferences

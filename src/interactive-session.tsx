@@ -93,6 +93,7 @@ export function InteractiveSessionView({
       <PromptView
         key={phase.pending.requestId}
         pending={phase.pending}
+        vault={vault}
         choiceName={choiceName}
         onAnswer={(value) => driverRef.current?.answer(value)}
         onCancel={onCancel}
@@ -151,6 +152,7 @@ function emptyTitle(phase: Exclude<SessionState, { state: "prompt" }>): string {
 
 interface PromptProps {
   pending: PendingPrompt;
+  vault: Vault;
   choiceName: string;
   onAnswer: (value: ReplyValue) => void;
   onCancel: () => void;
@@ -167,6 +169,7 @@ function PromptView(props: PromptProps) {
       const spec = fieldSpecFromPrompt(prompt);
       return (
         <FormPrompt
+          vault={props.vault}
           choiceName={props.choiceName}
           onCancel={props.onCancel}
           specs={[spec]}
@@ -183,6 +186,7 @@ function PromptView(props: PromptProps) {
     case "form":
       return (
         <FormPrompt
+          vault={props.vault}
           choiceName={props.choiceName}
           onCancel={props.onCancel}
           specs={prompt.fields.map(fieldSpecFromForm)}
@@ -393,11 +397,13 @@ function UnsupportedPrompt({
 
 function FormPrompt({
   specs,
+  vault,
   choiceName,
   onSubmit,
   onCancel,
 }: {
   specs: FieldSpec[];
+  vault: Vault;
   choiceName: string;
   onSubmit: (values: Record<string, string | string[]>) => void;
   onCancel: () => void;
@@ -437,6 +443,7 @@ function FormPrompt({
           key={formItemId(index)}
           id={formItemId(index)}
           spec={spec}
+          vault={vault}
           error={errors[index]}
           onChange={() =>
             setErrors((current) =>

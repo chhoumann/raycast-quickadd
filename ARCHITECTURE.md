@@ -9,6 +9,7 @@ Obsidian ships a command-line interface (Settings → General → Command line i
 - `quickadd:list [type=...] [commands]` - the flattened choice tree: `id`, `name`, `type`, `path` (`Multi / child`), `command`, `runnable` (a Multi is a folder, not runnable).
 - `quickadd:interactive id=<id> [vars=<json>]` - starts a choice and returns at once with the choice (`id`, `name`, `type`) and the address of a local prompt server (`host`, `port`, `sessionId`, `token`). QuickAdd then sends each prompt to that server instead of opening a modal.
 - `quickadd:run choice=<name>|id=<id> [vars=<json>] [ui] [verify]` - runs a choice to completion. **Run in Obsidian** passes `ui` so QuickAdd prompts inside the app. Quick Capture passes its text through `vars`. `verify` returns the created file path and an honest success or failure for Template and Capture choices.
+- `quickadd:suggest kind=links|tags` - completion items for text fields. `links` returns one item per note, attachment, and alias, each with `text` (what goes inside `[[...]]`) and `path`, plus `alias` on alias items. `tags` returns each tag without its `#` and its `count`, most used first. The CLI does no filtering; Raycast's `List` filters as the user types.
 
 The extension shells out with `execFile` (each argument is a separate argv entry, so no shell quoting is needed for values with spaces or newlines) and parses the JSON envelope.
 
@@ -62,6 +63,8 @@ Polling continues while a prompt is open. The poll is the server's only sign tha
 - A select or multi field with `allowCustomInput` gets a text field for values outside the list. For multi, the text field takes comma-separated values.
 - As in QuickAdd's one-page form, a single-note picker (`picker: "file"`) starts with no note picked, and the form won't submit until a required one has a pick.
 
+Text fields are controlled. When an edit ends in a new `[[`, or types `#` at the start of a word, the field pushes `LinkPicker` or `TagPicker` (`src/completion-pickers.tsx`), which loads its items from `quickadd:suggest`. A pick replaces the trigger with `[[text]]` or `#tag `, and the field takes focus again when the picker closes. The trigger rules are pure functions in `src/lib/completion.ts`.
+
 The suggester, confirm, checkbox, and info prompts keep their own views. A suggester is a searchable list, which suits a single pick from many items.
 
 A newer QuickAdd can send a prompt type this extension does not know. `nextEvent` turns it into an `unknown` prompt, which shows a screen that names the type, asks the user to update the extension, and offers **Cancel Run**.
@@ -75,5 +78,7 @@ Form item ids are positional (`field-0`), not field ids, because QuickAdd field 
 **QuickAdd >= 2.20** added `/abort` and the `effect` field. Before it, **Cancel Run** does not stop the run in Obsidian, and the finish message always reads "Ran <choice>".
 
 The `verify` flag that **Run in Obsidian** and Quick Capture pass needs **QuickAdd >= 2.14**. Older versions ignore it, and some captures can report success without writing.
+
+`[[` and `#` completion needs **QuickAdd with `quickadd:suggest`**, which is not released yet. Without it, the picker shows the CLI's error.
 
 In the one-page form, note pickers start empty only with **QuickAdd >= 2.31**, which marks them with `picker: "file"`. Older versions send them as plain suggesters, so they keep the first note picked.
