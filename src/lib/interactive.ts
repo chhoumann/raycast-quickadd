@@ -242,18 +242,19 @@ export function driveSession(
     current = state;
     onChange(state);
   };
-  const fail = (error: unknown) =>
-    enter({
-      state: "failed",
-      message: error instanceof Error ? error.message : String(error),
-    });
-  const stop = (report: boolean) => {
+  const end = (state: SessionState, report = true) => {
     if (!isLive()) return;
-    current = { state: "cancelled" };
-    if (report) onChange(current);
+    current = state;
+    if (report) onChange(state);
     polls.abort();
     void abortSession(session).catch(() => {});
   };
+  // A poll or reply that threw leaves a run nobody can drive, so release its prompt.
+  const fail = (error: unknown) =>
+    end({
+      state: "failed",
+      message: error instanceof Error ? error.message : String(error),
+    });
 
   void (async () => {
     let pending =
@@ -282,7 +283,7 @@ export function driveSession(
       enter({ state: "working" });
       replyToPrompt(session, requestId, value).catch(fail);
     },
-    cancel: () => stop(true),
-    cancelQuietly: () => stop(false),
+    cancel: () => end({ state: "cancelled" }),
+    cancelQuietly: () => end({ state: "cancelled" }, false),
   };
 }

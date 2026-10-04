@@ -19,13 +19,17 @@ afterEach(() => {
 });
 
 /** Like QuickAdd's server, one poll parks at a time and a second one gets an idle at once. */
-async function promptServer(queue: object[] = []) {
+async function promptServer(
+  queue: object[] = [],
+  { dropReplies = false } = {},
+) {
   const requests: string[] = [];
   let parked: ((event: object) => void) | null = null;
   server = createServer(async (req, res) => {
     await text(req);
     const path = new URL(req.url ?? "/", "http://127.0.0.1").pathname;
     requests.push(`${req.method} ${path}`);
+    if (dropReplies && path === "/reply") return req.socket.destroy();
     const send = (body: object) => {
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify(body));
@@ -89,6 +93,29 @@ describe("driveSession", () => {
     driver.cancelQuietly();
 
     await vi.waitFor(() => expect(requests).toContain("POST /abort"));
+  });
+
+  it("aborts the run and stops polling when a reply cannot be sent", async () => {
+    const { session, requests } = await promptServer([], { dropReplies: true });
+    const { driver, states } = drive(session, {
+      kind: "prompt",
+      pending: {
+        requestId: "r1",
+        prompt: { type: "confirm", header: "Proceed?" },
+      },
+    });
+    await vi.waitFor(() => expect(requests).toContain("GET /poll"));
+
+    driver.answer(true);
+
+    await vi.waitFor(() => expect(requests).toContain("POST /abort"));
+    const pollsAtAbort = requests.filter((r) => r === "GET /poll").length;
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(requests.filter((r) => r === "POST /abort")).toHaveLength(1);
+    expect(requests.filter((r) => r === "GET /poll")).toHaveLength(
+      pollsAtAbort,
+    );
+    expect(states.at(-1)).toMatchObject({ state: "failed" });
   });
 
   it("turns a prompt type this version does not know into an unknown prompt", async () => {
