@@ -167,8 +167,10 @@ export function readField(
   const customText = typeof custom === "string" ? custom.trim() : "";
   switch (spec.kind) {
     case "text": {
-      const text = typeof raw === "string" ? raw.trim() : "";
-      if (!text && !spec.optional) return REQUIRED;
+      // QuickAdd's input prompts hand the answer over untrimmed, so indented
+      // or newline-terminated text must reach the script as typed.
+      const text = typeof raw === "string" ? raw : "";
+      if (!text.trim() && !spec.optional) return REQUIRED;
       return { ok: true, value: text };
     }
     case "number": {

@@ -194,6 +194,13 @@ describe("readField", () => {
     });
   });
 
+  it("returns text exactly as typed, keeping leading and trailing whitespace", () => {
+    expect(readField(text, "    indented code\n", undefined)).toEqual({
+      ok: true,
+      value: "    indented code\n",
+    });
+  });
+
   const date: FieldSpec = {
     id: "d",
     label: "D",
