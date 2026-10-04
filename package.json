@@ -66,12 +66,15 @@
     "@types/node": "^24.0.0",
     "@types/react": "^19.0.0",
     "eslint": "^9.0.0",
-    "typescript": "^5.8.0"
+    "typescript": "^5.8.0",
+    "vitest": "^5.0.3"
   },
   "scripts": {
     "dev": "ray develop",
     "build": "ray build -e dist",
     "lint": "ray lint",
-    "fix-lint": "ray lint --fix"
+    "fix-lint": "ray lint --fix",
+    "test": "vitest run",
+    "e2e:protocol": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/e2e-protocol.mts"
   }
 }

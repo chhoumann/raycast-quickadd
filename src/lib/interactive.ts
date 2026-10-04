@@ -2,6 +2,7 @@ import { getPreferenceValues } from "@raycast/api";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { ObsidianCliError, resolveCliPath } from "./obsidianCli";
+import type { ChoiceRef } from "./types";
 
 const execFileAsync = promisify(execFile);
 
@@ -39,7 +40,6 @@ export interface FormField {
   /** Labels shown for `options` (e.g. note names for note paths). */
   displayOptions?: string[];
   dateFormat?: string;
-  withTime?: boolean;
   optional?: boolean;
   numericConfig?: { min?: number; max?: number; step?: number };
   suggesterConfig?: { allowCustomInput?: boolean; multiSelect?: boolean };
@@ -82,7 +82,7 @@ export type PromptSpec =
   | { type: "form"; fields: FormField[] };
 
 export type ReplyValue =
-  string | string[] | boolean | Record<string, string> | null;
+  string | string[] | boolean | Record<string, string | string[]> | null;
 
 export type SessionEvent =
   | { kind: "prompt"; requestId: string; prompt: PromptSpec }
@@ -97,10 +97,9 @@ export interface InteractiveSession {
   token: string;
 }
 
-/** Start an interactive run for a choice; returns the connection details to attach. */
 export async function startInteractive(
   choiceId: string,
-): Promise<InteractiveSession> {
+): Promise<{ session: InteractiveSession; choice: ChoiceRef }> {
   const cli = resolveCliPath();
   const { vault } = getPreferenceValues<Preferences>();
   let stdout: string;
@@ -132,6 +131,7 @@ export async function startInteractive(
     port?: number;
     sessionId?: string;
     token?: string;
+    choice?: ChoiceRef;
   };
   try {
     parsed = JSON.parse(stdout.trim());
@@ -140,17 +140,26 @@ export async function startInteractive(
       stdout.trim() || "Obsidian returned no output. Is the vault open?",
     );
   }
-  if (!parsed.ok || !parsed.port || !parsed.sessionId || !parsed.token) {
+  if (
+    !parsed.ok ||
+    !parsed.port ||
+    !parsed.sessionId ||
+    !parsed.token ||
+    !parsed.choice
+  ) {
     throw new ObsidianCliError(
       parsed.error ??
         "Interactive run could not be started (needs QuickAdd with the interactive bridge).",
     );
   }
   return {
-    host: parsed.host ?? "127.0.0.1",
-    port: parsed.port,
-    sessionId: parsed.sessionId,
-    token: parsed.token,
+    session: {
+      host: parsed.host ?? "127.0.0.1",
+      port: parsed.port,
+      sessionId: parsed.sessionId,
+      token: parsed.token,
+    },
+    choice: parsed.choice,
   };
 }
 

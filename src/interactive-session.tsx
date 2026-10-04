@@ -11,15 +11,20 @@ import {
 } from "@raycast/api";
 import { showFailureToast } from "@raycast/utils";
 import { useEffect, useRef, useState } from "react";
+import { FieldControl, customItemId } from "./form-field";
 import {
-  type FormField,
+  type FieldSpec,
+  fieldSpecFromForm,
+  fieldSpecFromPrompt,
+  readField,
+} from "./lib/fields";
+import {
   type InteractiveSession,
   type PromptSpec,
   type ReplyValue,
   type SessionEvent,
   pollSession,
   replyToPrompt,
-  startInteractive,
 } from "./lib/interactive";
 
 export interface PendingPrompt {
@@ -30,54 +35,33 @@ export interface PendingPrompt {
 type Answer = { cancelled: true } | { cancelled: false; value: ReplyValue };
 
 type Phase =
-  | { state: "connecting" }
   | { state: "prompt"; pending: PendingPrompt }
   | { state: "working" }
   | { state: "done"; message: string }
   | { state: "failed"; message: string };
 
-/**
- * Drives a QuickAdd interactive run: opens the session once, then runs a single
- * continuous poll loop that renders each runtime prompt as a native control,
- * parks until the user answers, sends the answer back, and resumes - until the
- * run completes. Covers the full prompt seam (suggester / input / date / confirm
- * / checkbox / info).
- */
 export function InteractiveSessionView({
-  choiceId,
   choiceName,
-  session: attachedSession,
+  session,
   initialPrompt,
   onFinish,
 }: {
   choiceName: string;
-  /** Start a fresh run for this choice (omit when attaching to a live session). */
-  choiceId?: string;
-  /** Attach to an already-started run instead of starting a new one. */
-  session?: InteractiveSession;
-  /** A prompt already received during hand-off, rendered immediately on mount. */
-  initialPrompt?: PendingPrompt;
+  session: InteractiveSession;
+  initialPrompt: PendingPrompt;
   /** Called on a successful finish instead of popping (e.g. a Quicklink root closes the window). */
   onFinish?: () => void;
 }) {
   const { pop } = useNavigation();
-  const [phase, setPhase] = useState<Phase>(
-    initialPrompt
-      ? { state: "prompt", pending: initialPrompt }
-      : { state: "connecting" },
-  );
+  const [phase, setPhase] = useState<Phase>({
+    state: "prompt",
+    pending: initialPrompt,
+  });
   const answerRef = useRef<((answer: Answer) => void) | null>(null);
-  // Live session + the prompt we're parked on, so unmount (Escape) can send a
-  // best-effort cancel and the running script doesn't hang server-side.
-  const sessionRef = useRef<InteractiveSession | null>(null);
   const openRequestRef = useRef<string | null>(null);
   // Set when the user cancels a prompt, so the server's resulting abort event is
   // rendered as a clean "Cancelled" rather than a failure.
   const userCancelledRef = useRef(false);
-  // Memoize the session start so React's double-invoked effect (StrictMode)
-  // starts the run exactly ONCE. Without this each invoke calls
-  // startInteractive -> a separate CLI run -> the script executes twice.
-  const sessionPromiseRef = useRef<Promise<InteractiveSession> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -85,19 +69,6 @@ export function InteractiveSessionView({
 
     (async () => {
       try {
-        let session: InteractiveSession;
-        if (attachedSession) {
-          // Handed a live session by the caller (default "Run" pre-polls and only
-          // opens this view once a prompt actually appears).
-          session = attachedSession;
-        } else {
-          if (!sessionPromiseRef.current) {
-            sessionPromiseRef.current = startInteractive(choiceId as string);
-          }
-          session = await sessionPromiseRef.current;
-        }
-        sessionRef.current = session;
-
         // Send the user's answer WITHOUT pausing the poll loop below. Continuous
         // polling is the server's only liveness signal: if we stopped polling
         // while a prompt was open, the server couldn't tell a slow user from a
@@ -135,7 +106,7 @@ export function InteractiveSessionView({
         // rest. It is processed only AFTER the await below, so a StrictMode
         // transient unmount (which sets `cancelled`) is observed first and the
         // discarded first mount never touches openRequestRef / cancels it.
-        let seeded: PendingPrompt | null = initialPrompt ?? null;
+        let seeded: PendingPrompt | null = initialPrompt;
         while (!cancelled) {
           let event: SessionEvent;
           if (seeded) {
@@ -192,14 +163,13 @@ export function InteractiveSessionView({
       answerRef.current = null;
       // Best-effort cancel so the script's prompt doesn't park forever if the
       // user dismissed the view while a prompt was open.
-      const session = sessionRef.current;
       const requestId = openRequestRef.current;
-      if (session && requestId) {
+      if (requestId) {
         openRequestRef.current = null;
         void replyToPrompt(session, requestId, null, true).catch(() => {});
       }
     };
-  }, [choiceId, choiceName]);
+  }, [session, choiceName]);
 
   useEffect(() => {
     if (phase.state === "done") {
@@ -220,6 +190,7 @@ export function InteractiveSessionView({
     const onCancel = () => answerRef.current?.({ cancelled: true });
     return (
       <PromptView
+        key={phase.pending.requestId}
         pending={phase.pending}
         choiceName={choiceName}
         onAnswer={onAnswer}
@@ -228,23 +199,20 @@ export function InteractiveSessionView({
     );
   }
 
-  const isBusy = phase.state === "connecting" || phase.state === "working";
   return (
     <List
-      isLoading={isBusy}
+      isLoading={phase.state === "working"}
       navigationTitle={choiceName}
       searchBarPlaceholder={`Running ${choiceName}...`}
     >
       <List.EmptyView
         icon={phase.state === "failed" ? Icon.ExclamationMark : Icon.Wand}
         title={
-          phase.state === "connecting"
-            ? "Starting interactive run..."
-            : phase.state === "working"
-              ? "Working..."
-              : phase.state === "failed"
-                ? "Run failed"
-                : "Done"
+          phase.state === "working"
+            ? "Working..."
+            : phase.state === "failed"
+              ? "Run failed"
+              : "Done"
         }
         description={
           phase.state === "failed"
@@ -268,12 +236,19 @@ function PromptView(props: PromptProps) {
   switch (prompt.type) {
     case "suggester":
       return <SuggesterPrompt {...props} prompt={prompt} />;
-    case "multiselect":
-      return <MultiSelectPrompt {...props} prompt={prompt} />;
     case "input":
-      return <InputPrompt {...props} prompt={prompt} />;
     case "date":
-      return <DatePrompt {...props} prompt={prompt} />;
+    case "multiselect": {
+      const spec = fieldSpecFromPrompt(prompt);
+      return (
+        <FormPrompt
+          choiceName={props.choiceName}
+          onCancel={props.onCancel}
+          specs={[spec]}
+          onSubmit={(values) => props.onAnswer(values[spec.id])}
+        />
+      );
+    }
     case "confirm":
       return <ConfirmPrompt {...props} prompt={prompt} />;
     case "checkbox":
@@ -281,7 +256,14 @@ function PromptView(props: PromptProps) {
     case "info":
       return <InfoPrompt {...props} prompt={prompt} />;
     case "form":
-      return <FormPrompt {...props} prompt={prompt} />;
+      return (
+        <FormPrompt
+          choiceName={props.choiceName}
+          onCancel={props.onCancel}
+          specs={prompt.fields.map(fieldSpecFromForm)}
+          onSubmit={props.onAnswer}
+        />
+      );
   }
 }
 
@@ -355,86 +337,6 @@ function SuggesterPrompt({
         ))}
       </List.Section>
     </List>
-  );
-}
-
-function InputPrompt({
-  prompt,
-  choiceName,
-  onAnswer,
-  onCancel,
-}: PromptProps & { prompt: Extract<PromptSpec, { type: "input" }> }) {
-  return (
-    <Form
-      navigationTitle={choiceName}
-      actions={
-        <ActionPanel>
-          <Action.SubmitForm
-            title="Submit"
-            icon={Icon.Check}
-            onSubmit={(values: { text: string }) => onAnswer(values.text ?? "")}
-          />
-          <CancelAction onCancel={onCancel} />
-        </ActionPanel>
-      }
-    >
-      {prompt.multiline ? (
-        <Form.TextArea
-          id="text"
-          title={prompt.header}
-          placeholder={prompt.placeholder}
-          defaultValue={prompt.defaultValue}
-        />
-      ) : (
-        <Form.TextField
-          id="text"
-          title={prompt.header}
-          placeholder={prompt.placeholder}
-          defaultValue={prompt.defaultValue}
-        />
-      )}
-    </Form>
-  );
-}
-
-function DatePrompt({
-  prompt,
-  choiceName,
-  onAnswer,
-  onCancel,
-}: PromptProps & { prompt: Extract<PromptSpec, { type: "date" }> }) {
-  const parsed = prompt.defaultValue
-    ? new Date(prompt.defaultValue)
-    : undefined;
-  const defaultValue =
-    parsed && !Number.isNaN(parsed.getTime()) ? parsed : undefined;
-  return (
-    <Form
-      navigationTitle={choiceName}
-      actions={
-        <ActionPanel>
-          <Action.SubmitForm
-            title="Submit"
-            icon={Icon.Check}
-            onSubmit={(values: { date: Date | null }) =>
-              onAnswer((values.date ?? new Date()).toISOString())
-            }
-          />
-          <CancelAction onCancel={onCancel} />
-        </ActionPanel>
-      }
-    >
-      <Form.DatePicker
-        id="date"
-        title={prompt.header}
-        defaultValue={defaultValue}
-        type={
-          prompt.withTime
-            ? Form.DatePicker.Type.DateTime
-            : Form.DatePicker.Type.Date
-        }
-      />
-    </Form>
   );
 }
 
@@ -519,45 +421,6 @@ function CheckboxPrompt({
   );
 }
 
-function MultiSelectPrompt({
-  prompt,
-  choiceName,
-  onAnswer,
-  onCancel,
-}: PromptProps & { prompt: Extract<PromptSpec, { type: "multiselect" }> }) {
-  return (
-    <Form
-      navigationTitle={choiceName}
-      actions={
-        <ActionPanel>
-          <Action.SubmitForm
-            title="Submit"
-            icon={Icon.Check}
-            onSubmit={(values: { selected: string[] }) =>
-              onAnswer(values.selected ?? [])
-            }
-          />
-          <CancelAction onCancel={onCancel} />
-        </ActionPanel>
-      }
-    >
-      <Form.TagPicker
-        id="selected"
-        title={prompt.placeholder ?? "Select values"}
-        defaultValue={prompt.preselected}
-      >
-        {prompt.items.map((item, index) => (
-          <Form.TagPicker.Item
-            key={`${item.value}-${index}`}
-            value={item.value}
-            title={item.title}
-          />
-        ))}
-      </Form.TagPicker>
-    </Form>
-  );
-}
-
 function InfoPrompt({
   prompt,
   choiceName,
@@ -584,42 +447,30 @@ function InfoPrompt({
 }
 
 function FormPrompt({
-  prompt,
+  specs,
   choiceName,
-  onAnswer,
+  onSubmit,
   onCancel,
-}: PromptProps & { prompt: Extract<PromptSpec, { type: "form" }> }) {
-  const [unpickedIndex, setUnpickedIndex] = useState<number>();
+}: {
+  specs: FieldSpec[];
+  choiceName: string;
+  onSubmit: (values: Record<string, string | string[]>) => void;
+  onCancel: () => void;
+}) {
+  const [errors, setErrors] = useState<(string | undefined)[]>([]);
 
   function handleSubmit(values: Record<string, unknown>) {
-    const unpicked = prompt.fields.findIndex(
-      (field, index) =>
-        isSingleNotePicker(field) &&
-        !field.optional &&
-        !values[formItemId(index)],
-    );
-    if (unpicked !== -1) {
-      setUnpickedIndex(unpicked);
-      void showToast({
-        style: Toast.Style.Failure,
-        title: `${prompt.fields[unpicked].label} is required`,
-      });
-      return;
+    const reads = specs.map((spec, index) => {
+      const id = formItemId(index);
+      return readField(spec, values[id], values[customItemId(id)]);
+    });
+    setErrors(reads.map((read) => (read.ok ? undefined : read.error)));
+    const reply: Record<string, string | string[]> = {};
+    for (const [index, read] of reads.entries()) {
+      if (!read.ok) return;
+      reply[specs[index].id] = read.value;
     }
-    const result: Record<string, string> = {};
-    for (const [index, field] of prompt.fields.entries()) {
-      const raw = values[formItemId(index)];
-      if (raw instanceof Date) {
-        // Match the one-page modal: date fields carry a raw @date:ISO the plugin
-        // then formats with the field's dateFormat.
-        result[field.id] = `@date:${raw.toISOString()}`;
-      } else if (Array.isArray(raw)) {
-        result[field.id] = raw.join(", ");
-      } else {
-        result[field.id] = raw == null ? "" : String(raw);
-      }
-    }
-    onAnswer(result);
+    onSubmit(reply);
   }
 
   return (
@@ -636,15 +487,15 @@ function FormPrompt({
         </ActionPanel>
       }
     >
-      {prompt.fields.map((field, index) => (
-        <FormFieldControl
+      {specs.map((spec, index) => (
+        <FieldControl
           key={formItemId(index)}
           id={formItemId(index)}
-          field={field}
-          error={index === unpickedIndex ? "Required" : undefined}
+          spec={spec}
+          error={errors[index]}
           onChange={() =>
-            setUnpickedIndex((current) =>
-              current === index ? undefined : current,
+            setErrors((current) =>
+              current[index] ? current.with(index, undefined) : current,
             )
           }
         />
@@ -659,117 +510,4 @@ function FormPrompt({
  */
 function formItemId(index: number): string {
   return `field-${index}`;
-}
-
-/**
- * A single-note picker (the Capture to target or a {{FILE:...}} field). Like
- * QuickAdd's own one-page form, it starts with no pick unless the field
- * provides a value, so an untouched submit never picks the first note for the
- * user. QuickAdd before 2.31.0 doesn't mark note pickers, so their fields keep
- * the first option picked.
- */
-function isSingleNotePicker(field: FormField): boolean {
-  return (
-    field.type === "suggester" &&
-    field.picker === "file" &&
-    !field.suggesterConfig?.multiSelect &&
-    Array.isArray(field.options) &&
-    field.options.length > 0
-  );
-}
-
-function FormFieldControl({
-  id,
-  field,
-  error,
-  onChange,
-}: {
-  id: string;
-  field: FormField;
-  error?: string;
-  onChange: () => void;
-}) {
-  const title = field.optional ? `${field.label} (Optional)` : field.label;
-  const hasOptions = Array.isArray(field.options) && field.options.length > 0;
-
-  if (field.type === "date") {
-    const parsed = field.defaultValue
-      ? new Date(field.defaultValue)
-      : undefined;
-    const defaultValue =
-      parsed && !Number.isNaN(parsed.getTime()) ? parsed : undefined;
-    return (
-      <Form.DatePicker
-        id={id}
-        title={title}
-        info={field.description}
-        defaultValue={defaultValue}
-        type={
-          field.withTime
-            ? Form.DatePicker.Type.DateTime
-            : Form.DatePicker.Type.Date
-        }
-      />
-    );
-  }
-
-  if (hasOptions) {
-    const options = field.options ?? [];
-    const labels = field.displayOptions ?? options;
-    const defaultValue =
-      field.defaultValue && options.includes(field.defaultValue)
-        ? field.defaultValue
-        : undefined;
-    return (
-      <Form.Dropdown
-        id={id}
-        title={title}
-        info={field.description}
-        defaultValue={defaultValue}
-        error={error}
-        onChange={onChange}
-      >
-        {isSingleNotePicker(field) && (
-          <Form.Dropdown.Item
-            value=""
-            title={field.optional ? "None" : "Select..."}
-          />
-        )}
-        {options.map((option, index) => (
-          <Form.Dropdown.Item
-            key={`${option}-${index}`}
-            value={option}
-            title={labels[index] ?? option}
-          />
-        ))}
-      </Form.Dropdown>
-    );
-  }
-
-  if (field.type === "textarea") {
-    return (
-      <Form.TextArea
-        id={id}
-        title={title}
-        info={field.description}
-        placeholder={field.placeholder}
-        defaultValue={field.defaultValue}
-      />
-    );
-  }
-
-  return (
-    <Form.TextField
-      id={id}
-      title={title}
-      info={field.description}
-      placeholder={
-        field.placeholder ??
-        (field.type === "number" || field.type === "slider"
-          ? "Number"
-          : undefined)
-      }
-      defaultValue={field.defaultValue}
-    />
-  );
 }
