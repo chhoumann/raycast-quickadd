@@ -15,7 +15,7 @@ Obsidian ships a command-line interface (Settings → General → Command line i
 
 ## Commands
 
-- **Run QuickAdd Choice** - browse every runnable choice, run it, and answer its prompts in Raycast. Choices that Obsidian flags as commands are marked, and any choice can be **pinned as a Quicklink** (⌘K → Pin as Quicklink) so it becomes root-searchable and hotkey-able in Raycast.
+- **Run QuickAdd Choice** - browse every runnable choice, run it, and answer its prompts in Raycast. Up to five choices you ran often and recently sit in a **Recent** section at the top. Choices that Obsidian flags as commands are marked, and any choice can be **pinned as a Quicklink** (⌘K → Pin as Quicklink) so it becomes root-searchable and hotkey-able in Raycast.
 - **Quick Capture** - a no-view command that sends its text argument to a capture choice of your choosing (set per-command in preferences). Bind it to a hotkey for frictionless capture.
 
 ### Multi-line input, driven by the vault

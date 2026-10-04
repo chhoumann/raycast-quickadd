@@ -16,6 +16,8 @@ import {
   createDeeplink,
   showFailureToast,
   useCachedPromise,
+  useCachedState,
+  useFrecencySorting,
 } from "@raycast/utils";
 import { setTimeout as sleep } from "node:timers/promises";
 import { useEffect, useRef, useState } from "react";
@@ -59,6 +61,14 @@ function ChoiceList() {
     }
     return response.choices.filter((choice) => choice.runnable);
   });
+  // The hook sorts in place and cannot tell visited items from the rest, so it
+  // gets a copy and the visited ids are kept beside it.
+  const { data: byFrecency, visitItem } = useFrecencySorting(data && [...data]);
+  const [visited, setVisited] = useCachedState<string[]>("visited-choices", []);
+  const visit = (choice: ChoiceSummary) => {
+    void visitItem(choice);
+    setVisited((ids) => (ids.includes(choice.id) ? ids : [...ids, choice.id]));
+  };
 
   if (error) {
     return (
@@ -72,6 +82,9 @@ function ChoiceList() {
     );
   }
 
+  const recent = byFrecency
+    .filter((choice) => visited.includes(choice.id))
+    .slice(0, 5);
   const sections = groupByParent(data ?? []);
 
   return (
@@ -79,10 +92,19 @@ function ChoiceList() {
       isLoading={isLoading}
       searchBarPlaceholder="Search QuickAdd choices..."
     >
+      <List.Section title="Recent">
+        {recent.map((choice) => (
+          <ChoiceItem
+            key={`recent-${choice.id}`}
+            choice={choice}
+            onRun={visit}
+          />
+        ))}
+      </List.Section>
       {sections.map(([parent, choices]) => (
         <List.Section key={parent} title={parent}>
           {choices.map((choice) => (
-            <ChoiceItem key={choice.id} choice={choice} />
+            <ChoiceItem key={choice.id} choice={choice} onRun={visit} />
           ))}
         </List.Section>
       ))}
@@ -174,13 +196,20 @@ function groupByParent(
   );
 }
 
-function ChoiceItem({ choice }: { choice: ChoiceSummary }) {
+function ChoiceItem({
+  choice,
+  onRun,
+}: {
+  choice: ChoiceSummary;
+  onRun: (choice: ChoiceSummary) => void;
+}) {
   const { push, pop } = useNavigation();
 
   // Stay on the list until a prompt appears, so a prompt-less run just reports
   // via a toast. A run that raises nothing for STALL_MS hands its poll to the
   // session view, which can point the user at Obsidian.
   async function runInteractive() {
+    onRun(choice);
     const toast = await showToast({
       style: Toast.Style.Animated,
       title: `Running ${choice.name}...`,
@@ -220,6 +249,7 @@ function ChoiceItem({ choice }: { choice: ChoiceSummary }) {
   }
 
   async function runInObsidian() {
+    onRun(choice);
     const toast = await showToast({
       style: Toast.Style.Animated,
       title: `Running ${choice.name} in Obsidian...`,
