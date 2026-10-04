@@ -24,11 +24,15 @@ async function promptServer(
   { dropReplies = false } = {},
 ) {
   const requests: string[] = [];
+  const dropped: string[] = [];
   let parked: ((event: object) => void) | null = null;
   server = createServer(async (req, res) => {
     await text(req);
     const path = new URL(req.url ?? "/", "http://127.0.0.1").pathname;
     requests.push(`${req.method} ${path}`);
+    res.on("close", () => {
+      if (!res.writableFinished) dropped.push(`${req.method} ${path}`);
+    });
     if (dropReplies && path === "/reply") return req.socket.destroy();
     const send = (body: object) => {
       res.writeHead(200, { "content-type": "application/json" });
@@ -54,7 +58,7 @@ async function promptServer(
     token: "t",
   };
   const emit = (event: object) => (parked ? parked(event) : queue.push(event));
-  return { session, requests, emit };
+  return { session, requests, dropped, emit };
 }
 
 function drive(session: InteractiveSession, handoff?: Handoff) {
@@ -166,6 +170,19 @@ describe("driveSession", () => {
       ]),
     );
     driver.cancelQuietly();
+  });
+
+  it("closes the handed-over poll and aborts the run on cancel", async () => {
+    const { session, requests, dropped } = await promptServer();
+    const first = await firstEvent(session, 50);
+    if (first.kind !== "poll")
+      throw new Error(`expected a poll, got ${first.kind}`);
+    const { driver } = drive(session, first);
+
+    driver.cancel();
+
+    await vi.waitFor(() => expect(dropped).toContain("GET /poll"));
+    await vi.waitFor(() => expect(requests).toContain("POST /abort"));
   });
 
   it("sends no abort after the run is done", async () => {

@@ -138,7 +138,7 @@ export type SessionEnd = Extract<SessionState, { state: "done" | "cancelled" }>;
 /** How a caller that started polling hands the run to the session view. */
 export type Handoff =
   | { kind: "prompt"; pending: PendingPrompt }
-  | { kind: "poll"; next: Promise<RunEvent> };
+  | { kind: "poll"; next: Promise<RunEvent>; polls: AbortController };
 
 export function initialState(handoff?: Handoff): SessionState {
   return handoff?.kind === "prompt"
@@ -195,9 +195,10 @@ export async function firstEvent(
   s: InteractiveSession,
   ms: number,
 ): Promise<Exclude<RunEvent, { kind: "prompt" }> | Handoff> {
-  const next = nextEvent(s);
+  const polls = new AbortController();
+  const next = nextEvent(s, polls.signal);
   const event = await Promise.race([next, sleep(ms, undefined)]);
-  if (!event) return { kind: "poll", next };
+  if (!event) return { kind: "poll", next, polls };
   if (event.kind !== "prompt") return event;
   const { requestId, prompt } = event;
   return { kind: "prompt", pending: { requestId, prompt } };
@@ -232,7 +233,8 @@ export function driveSession(
   }: { handoff?: Handoff; onChange: (state: SessionState) => void },
 ): SessionDriver {
   let current = initialState(handoff);
-  const polls = new AbortController();
+  const polls =
+    handoff?.kind === "poll" ? handoff.polls : new AbortController();
   const isLive = () =>
     current.state === "connecting" ||
     current.state === "prompt" ||
