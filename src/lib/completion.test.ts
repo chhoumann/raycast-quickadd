@@ -53,6 +53,10 @@ describe("tagTriggerAt", () => {
     expect(tagTriggerAt("note", "note#")).toBeUndefined();
   });
 
+  it("fires on a new line after an abandoned [[ on the line above", () => {
+    expect(tagTriggerAt("[[Plan\n", "[[Plan\n#")).toBe(7);
+  });
+
   it("ignores # inside an open link", () => {
     expect(tagTriggerAt("[[Plan ", "[[Plan #")).toBeUndefined();
   });
@@ -80,6 +84,6 @@ describe("insertLink", () => {
 
 describe("insertTag", () => {
   it("replaces the # with the tag and keeps the text after it", () => {
-    expect(insertTag("a #b c", 2, "work")).toBe("a #work b c");
+    expect(insertTag("a # c", 2, "work")).toBe("a #work c");
   });
 });

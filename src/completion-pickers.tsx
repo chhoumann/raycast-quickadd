@@ -44,6 +44,7 @@ export function LinkPicker({ vault, onPick, onClose }: PickerProps<LinkItem>) {
           key={`${item.text}-${index}`}
           icon={Icon.Document}
           {...linkLabel(item)}
+          keywords={[item.path, item.text]}
           actions={
             <ActionPanel>
               <Action

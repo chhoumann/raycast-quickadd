@@ -33,7 +33,8 @@ export function tagTriggerAt(prev: string, next: string): number | undefined {
   if (edit?.text !== "#") return undefined;
   const before = next.slice(0, edit.at);
   if (TAG_CHAR.test(before.slice(-1))) return undefined;
-  if (before.lastIndexOf("[[") > before.lastIndexOf("]]")) return undefined;
+  const line = before.slice(before.lastIndexOf("\n") + 1);
+  if (line.lastIndexOf("[[") > line.lastIndexOf("]]")) return undefined;
   return edit.at;
 }
 
@@ -42,5 +43,5 @@ export function insertLink(value: string, at: number, text: string): string {
 }
 
 export function insertTag(value: string, at: number, tag: string): string {
-  return `${value.slice(0, at)}#${tag} ${value.slice(at + 1)}`;
+  return `${value.slice(0, at)}#${tag}${value.slice(at + 1)}`;
 }
