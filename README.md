@@ -63,11 +63,11 @@ The extension is not in the Raycast Store yet. Until it is, run it from source:
 ```bash
 git clone https://github.com/chhoumann/raycast-quickadd
 cd raycast-quickadd
-pnpm install
-pnpm dev
+npm install
+npm run dev
 ```
 
-`pnpm dev` installs the extension into Raycast and keeps it up to date while it runs.
+`npm run dev` installs the extension into Raycast and keeps it up to date while it runs.
 
 ## Requirements
 
@@ -119,15 +119,15 @@ Obsidian ships a command-line interface, and QuickAdd registers handlers on it. 
 ## Development
 
 ```bash
-pnpm install
-pnpm dev            # ray develop: installs into Raycast in watch mode
-pnpm lint           # ray lint: manifest, code, and store screenshots
-pnpm test           # unit tests for field parsing, completion, and the run state machine
-pnpm build
-pnpm e2e:protocol   # drives every e2e choice through the real plugin
+npm install
+npm run dev         # ray develop: installs into Raycast in watch mode
+npm run lint        # ray lint: manifest, code, and store screenshots
+npm test            # unit tests for field parsing, completion, and the run state machine
+npm run build
+npm run e2e:protocol  # drives every e2e choice through the real plugin
 ```
 
-`e2e-vault/` has one QuickAdd choice per field kind and a macro script that raises every script prompt. Build QuickAdd in `~/Developer/quickadd` (or set `QUICKADD_DIR`), run `scripts/setup-e2e-vault.sh` to copy the plugin in, open the folder in Obsidian once with **Open folder as vault**, and run `pnpm e2e:protocol`. The script runs every choice through `quickadd:interactive`, answers each prompt the way the extension would, and checks the notes QuickAdd writes to `e2e-vault/Output/`.
+`e2e-vault/` has one QuickAdd choice per field kind and a macro script that raises every script prompt. Build QuickAdd in `~/Developer/quickadd` (or set `QUICKADD_DIR`), run `scripts/setup-e2e-vault.sh` to copy the plugin in, open the folder in Obsidian once with **Open folder as vault**, and run `npm run e2e:protocol`. The script runs every choice through `quickadd:interactive`, answers each prompt the way the extension would, and checks the notes QuickAdd writes to `e2e-vault/Output/`.
 
 `demo-vault/` is the vault in the pictures above. `scripts/setup-demo-vault.sh` downloads the QuickAdd release it expects. To open a choice against either vault from a deeplink, URL-encode `{"vaultPath":"<repo>/demo-vault","choiceId":"quick-capture"}` and append it as `?context=` to `raycast://extensions/christian_bager_bach_houmann/quickadd/run-choice`.
 
