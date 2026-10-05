@@ -4,7 +4,7 @@
 [![MIT license](https://img.shields.io/github/license/chhoumann/raycast-quickadd)](LICENSE)
 [![Raycast Store: coming soon](https://img.shields.io/badge/Raycast_Store-coming_soon-FF6363?logo=raycast&logoColor=white)](https://www.raycast.com/christian_bager_bach_houmann/quickadd)
 
-![The Run QuickAdd Choice command in Raycast, listing a vault's QuickAdd choices with a Recent section at the top](media/hero.png)
+![The Run QuickAdd Choice command in Raycast, listing a vault's QuickAdd choices with a Recent section at the top](media/hero.jpg)
 
 Run your [QuickAdd](https://github.com/chhoumann/quickadd) choices from Raycast. The forms, the pickers, and the finish message are Raycast's. The work is QuickAdd's, running inside Obsidian through Obsidian's command-line interface. Nothing is re-implemented, so every capture, template, and macro you already have works the day you install this.
 
@@ -18,19 +18,19 @@ I write QuickAdd, and this is its official Raycast extension.
 
 Captures, templates, and macros run from one searchable list. A choice's inputs arrive together as one form: text fields, a dropdown for `{{VALUE:a,b,c}}`, a tag picker for `|multi`, a date picker for `{{VDATE}}`, and a note picker for `{{FILE:...}}` that starts empty. Prompts that a macro script raises later, such as `inputPrompt` and `suggester`, arrive one at a time.
 
-![The Meeting Notes form with a Topic text field, a Person note picker set to Sofia Almeida, and a Tags picker holding #decision and #follow-up](media/run-form.png)
+![The Meeting Notes form with a Topic text field, a Person note picker set to Sofia Almeida, and a Tags picker holding #decision and #follow-up](media/run-form.jpg)
 
 A number field with `min` and `max` rejects values outside the range before anything reaches the vault. A required field that is empty says so on the field.
 
-![The Add Book form rejecting a rating of 7 with the message Between 1 and 5](media/validation.png)
+![The Add Book form rejecting a rating of 7 with the message Between 1 and 5](media/validation.jpg)
 
 ### Link and tag completion
 
 Type `[[` in any text field and a searchable list of your notes and aliases opens. Pick one and the link lands where you typed. Type `#` at the start of a word and the same happens with your tags, most used first. Both need QuickAdd 2.31 or later.
 
-![The link picker listing the vault's notes with their folders](media/link-picker.png)
+![The link picker listing the vault's notes with their folders](media/link-picker.jpg)
 
-![The tag picker listing the vault's tags with how often each is used](media/tag-picker.png)
+![The tag picker listing the vault's tags with how often each is used](media/tag-picker.jpg)
 
 ### Capture without a form
 
@@ -40,17 +40,17 @@ Three commands send text to a capture choice you name in their preferences and n
 
 Every choice has two pin actions. **Pin as Quicklink** makes the choice searchable from Raycast's root, where you can give it a hotkey. **Pin as Quicklink with Argument** makes a Quicklink that takes text inline: type its name, press Tab, type the text, press Enter, and the text runs as the choice's `{{VALUE}}`. **Run in Obsidian** (⌘↵) runs the choice with QuickAdd's own modals when you want them.
 
-![The action panel on a choice: Run, Run in Obsidian, Pin as Quicklink, Pin as Quicklink with Argument, Copy Deeplink](media/actions.png)
+![The action panel on a choice: Run, Run in Obsidian, Pin as Quicklink, Pin as Quicklink with Argument, Copy Deeplink](media/actions.jpg)
 
 ### A finish message that says what happened
 
 When a run ends, the toast reads "Created Books/Piranesi.md" or "Added to Inbox.md", and **Open in Obsidian** is one keystroke away. A run that changed nothing reads "Ran Journal".
 
-![The choice list after a run, with the toast Created Projects/Kitchen Garden.md](media/created-toast.png)
+![The choice list after a run, with the toast Created Projects/Kitchen Garden.md](media/created-toast.jpg)
 
 **Cancel Run** (⇧⌘⌫) tells QuickAdd to stop. A macro that is mid-work stops at its next prompt instead of finishing behind your back. Leaving the form does the same.
 
-![The Journal form's action panel with Submit and a red Cancel Run](media/cancel-run.png)
+![The Journal form's action panel with Submit and a red Cancel Run](media/cancel-run.jpg)
 
 ### Finds your vault and starts Obsidian
 
@@ -103,7 +103,7 @@ pnpm dev
 - For a big text area, declare the value as multi-line in QuickAdd: `{{VALUE:Entry|type:multiline}}`, or a macro user script whose `quickadd.inputs` entry has `type: "textarea"`. The form renders what the vault describes.
 - A lightning bolt next to a choice means you added it as a command in QuickAdd. Those are good candidates to pin.
 
-![The Journal form with a multi-line Entry text area holding two paragraphs and a link to Sofia Almeida](media/multiline.png)
+![The Journal form with a multi-line Entry text area holding two paragraphs and a link to Sofia Almeida](media/multiline.jpg)
 
 ## Limitations
 

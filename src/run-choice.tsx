@@ -322,7 +322,7 @@ function DirectChoice({
           void showHUD(
             end.state === "done"
               ? doneMessage(choiceName, end.result)
-              : "Cancelled",
+              : "Canceled",
           )
         }
       />
@@ -397,7 +397,7 @@ function ChoiceItem({
             void showToast(
               end.state === "done"
                 ? doneToast(vault, choice.name, end.result)
-                : { style: Toast.Style.Success, title: "Cancelled" },
+                : { style: Toast.Style.Success, title: "Canceled" },
             );
           }}
         />,
