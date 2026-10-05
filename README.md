@@ -36,8 +36,6 @@ Type `[[` in any text field and a searchable list of your notes and aliases open
 
 Three commands send text to a capture choice you name in their preferences and never open a view. **Quick Capture** takes the text as an argument in Raycast's root search. **Capture Selection** takes the text selected in the frontmost app. **Capture Clipboard** takes the clipboard. Give each a hotkey and capturing is one keystroke and one line of typing.
 
-![Raycast's root search with Quick Capture selected and the argument Call the dentist about Thursday typed after it](media/quick-capture-command.png)
-
 ### Pin a choice, or run it in Obsidian
 
 Every choice has two pin actions. **Pin as Quicklink** makes the choice searchable from Raycast's root, where you can give it a hotkey. **Pin as Quicklink with Argument** makes a Quicklink that takes text inline: type its name, press Tab, type the text, press Enter, and the text runs as the choice's `{{VALUE}}`. **Run in Obsidian** (⌘↵) runs the choice with QuickAdd's own modals when you want them.
