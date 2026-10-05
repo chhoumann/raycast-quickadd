@@ -10,7 +10,7 @@ Run your [QuickAdd](https://github.com/chhoumann/quickadd) choices from Raycast.
 
 I write QuickAdd, and this is its official Raycast extension.
 
-![Picking Quick Capture from the list, typing a note with a [[ link pick and a # tag pick, submitting, and the new line appearing in Obsidian](media/quick-capture.gif)
+![Picking Quick Capture from the list, typing a note with a link pick and a tag pick, submitting, and the new line appearing in Obsidian](media/quick-capture.gif)
 
 ## What you can do
 
@@ -103,7 +103,7 @@ pnpm dev
 - For a big text area, declare the value as multi-line in QuickAdd: `{{VALUE:Entry|type:multiline}}`, or a macro user script whose `quickadd.inputs` entry has `type: "textarea"`. The form renders what the vault describes.
 - A lightning bolt next to a choice means you added it as a command in QuickAdd. Those are good candidates to pin.
 
-![The Journal form with a multi-line Entry text area holding two paragraphs and a [[Sofia Almeida]] link](media/multiline.png)
+![The Journal form with a multi-line Entry text area holding two paragraphs and a link to Sofia Almeida](media/multiline.png)
 
 ## Limitations
 
