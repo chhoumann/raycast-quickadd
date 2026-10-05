@@ -79,6 +79,6 @@ Form item ids are positional (`field-0`), not field ids, because QuickAdd field 
 
 The `verify` flag that **Run in Obsidian** and the capture commands pass needs **QuickAdd >= 2.14**. Older versions ignore it, and some captures can report success without writing.
 
-`[[` and `#` completion needs **QuickAdd with `quickadd:suggest`**, which is not released yet. Without it, the picker shows the CLI's error.
+`[[` and `#` completion needs **QuickAdd >= 2.31**, which added `quickadd:suggest`. Before it, the picker says which version it needs.
 
 In the one-page form, note pickers start empty only with **QuickAdd >= 2.31**, which marks them with `picker: "file"`. Older versions send them as plain suggesters, so they keep the first note picked.
