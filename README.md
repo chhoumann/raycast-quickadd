@@ -1,86 +1,138 @@
-# QuickAdd for Obsidian - Raycast extension
+# QuickAdd for Obsidian
 
-Run your [QuickAdd](https://github.com/chhoumann/quickadd) choices, captures, and templates from Raycast. This extension is a thin front end over QuickAdd: it does not reimplement anything, it drives the plugin through the official Obsidian CLI so every workflow you already have in your vault is reachable from Raycast.
+[![CI](https://github.com/chhoumann/raycast-quickadd/actions/workflows/ci.yml/badge.svg)](https://github.com/chhoumann/raycast-quickadd/actions/workflows/ci.yml)
+[![MIT license](https://img.shields.io/github/license/chhoumann/raycast-quickadd)](LICENSE)
+[![Raycast Store: coming soon](https://img.shields.io/badge/Raycast_Store-coming_soon-FF6363?logo=raycast&logoColor=white)](https://www.raycast.com/christian_bager_bach_houmann/quickadd)
+
+![The Run QuickAdd Choice command in Raycast, listing a vault's QuickAdd choices with a Recent section at the top](media/hero.png)
+
+Run your [QuickAdd](https://github.com/chhoumann/quickadd) choices from Raycast. The forms, the pickers, and the finish message are Raycast's. The work is QuickAdd's, running inside Obsidian through Obsidian's command-line interface. Nothing is re-implemented, so every capture, template, and macro you already have works the day you install this.
+
+The extension is written by Christian Bager Bach Houmann, who also writes QuickAdd.
+
+![Picking Quick Capture from the list, typing a note with a [[ link pick and a # tag pick, submitting, and the new line appearing in Obsidian](media/quick-capture.gif)
+
+## What you can do
+
+### Run any choice as a native form
+
+Captures, templates, and macros run from one searchable list. A choice's inputs arrive together as one form: text fields, a dropdown for `{{VALUE:a,b,c}}`, a tag picker for `|multi`, a date picker for `{{VDATE}}`, and a note picker for `{{FILE:...}}` that starts empty. Prompts that a macro script raises later, such as `inputPrompt` and `suggester`, arrive one at a time.
+
+![The Meeting Notes form with a Topic text field, a Person note picker set to Sofia Almeida, and a Tags picker holding #decision and #follow-up](media/run-form.png)
+
+A number field with `min` and `max` rejects values outside the range before anything reaches the vault. A required field that is empty says so on the field.
+
+![The Add Book form rejecting a rating of 7 with the message Between 1 and 5](media/validation.png)
+
+### Link and tag completion
+
+Type `[[` in any text field and a searchable list of your notes and aliases opens. Pick one and the link lands where you typed. Type `#` at the start of a word and the same happens with your tags, most used first. Both need QuickAdd 2.31 or later.
+
+![The link picker listing the vault's notes with their folders](media/link-picker.png)
+
+![The tag picker listing the vault's tags with how often each is used](media/tag-picker.png)
+
+### Capture without a form
+
+Three commands send text to a capture choice you name in their preferences and never open a view. **Quick Capture** takes the text as an argument in Raycast's root search. **Capture Selection** takes the text selected in the frontmost app. **Capture Clipboard** takes the clipboard. Give each a hotkey and capturing is one keystroke and one line of typing.
+
+![Raycast's root search with Quick Capture selected and the argument Call the dentist about Thursday typed after it](media/quick-capture-command.png)
+
+### Pin a choice, or run it in Obsidian
+
+Every choice has two pin actions. **Pin as Quicklink** makes the choice searchable from Raycast's root, where you can give it a hotkey. **Pin as Quicklink with Argument** makes a Quicklink that takes text inline: type its name, press Tab, type the text, press Enter, and the text runs as the choice's `{{VALUE}}`. **Run in Obsidian** (⌘↵) runs the choice with QuickAdd's own modals when you want them.
+
+![The action panel on a choice: Run, Run in Obsidian, Pin as Quicklink, Pin as Quicklink with Argument, Copy Deeplink](media/actions.png)
+
+### A finish message that says what happened
+
+When a run ends, the toast reads "Created Books/Piranesi.md" or "Added to Inbox.md", and **Open in Obsidian** is one keystroke away. A run that changed nothing reads "Ran Journal".
+
+![The choice list after a run, with the toast Created Projects/Kitchen Garden.md](media/created-toast.png)
+
+**Cancel Run** (⇧⌘⌫) tells QuickAdd to stop. A macro that is mid-work stops at its next prompt instead of finishing behind your back. Leaving the form does the same.
+
+![The Journal form's action panel with Submit and a red Cancel Run](media/cancel-run.png)
+
+### Finds your vault and starts Obsidian
+
+The extension reads Obsidian's vault list and uses the one vault that has QuickAdd enabled. When several vaults have it, **Run QuickAdd Choice** lists them and the capture commands ask you to set the **Vault** preference. When the vault is closed, the extension opens it, waits until QuickAdd answers, and brings Raycast back to the front.
 
 ## Install
 
-- **Raycast Store:** link coming once the extension is published.
-- **From source:**
+The extension is not in the Raycast Store yet. Until it is, run it from source:
 
-  ```bash
-  git clone https://github.com/chhoumann/raycast-quickadd && cd raycast-quickadd && pnpm install && pnpm dev
-  ```
+```bash
+git clone https://github.com/chhoumann/raycast-quickadd
+cd raycast-quickadd
+pnpm install
+pnpm dev
+```
 
-## How it works
-
-Obsidian ships a command-line interface (Settings → General → Command line interface). QuickAdd registers handlers on it. The extension shells out to that CLI and parses the JSON it returns.
-
-1. The command lists your choices with `quickadd:list`, grouped by their Multi folders.
-2. **Run** starts the choice with `quickadd:interactive`. QuickAdd runs it inside Obsidian and sends each prompt to Raycast instead of opening a modal.
-3. The extension renders each prompt as a native Raycast control. A choice's declared inputs arrive together as one form. Prompts from a macro script (`inputPrompt`, `suggester`, `datePrompt`, and the rest) arrive one at a time.
-4. When the run finishes, a toast says what it did ("Created <file>" or "Added to <file>") and offers **Open in Obsidian**.
-
-**Run in Obsidian** (⌘K) runs the choice inside Obsidian with QuickAdd's own modals.
-
-## Commands
-
-- **Run QuickAdd Choice** - browse every runnable choice, run it, and answer its prompts in Raycast. Up to five choices you ran often and recently sit in a **Recent** section at the top. Choices that Obsidian flags as commands are marked, and any choice can be **pinned as a Quicklink** (⌘K → Pin as Quicklink) so it becomes root-searchable and hotkey-able in Raycast.
-- **Quick Capture** - a no-view command that sends its text argument to a capture choice of your choosing (set per-command in preferences). Bind it to a hotkey for frictionless capture.
-- **Capture Selection** - a no-view command that sends the text selected in the frontmost app to a capture choice, set per-command like Quick Capture's.
-- **Capture Clipboard** - a no-view command that sends the clipboard text to a capture choice, set per-command like Quick Capture's.
-
-**Pin as Quicklink with Argument** (⌘K) makes a Quicklink that takes text inline in root search: type its name, press Tab, type the text, and press Enter. The text runs as the choice's `{{VALUE}}`, so a pinned capture with a plain `{{VALUE}}` works like Quick Capture for that choice. Any other prompt still opens in Raycast, and a choice without a plain `{{VALUE}}` ignores the text.
-
-### Multi-line input, driven by the vault
-
-The form renders each input from the field metadata QuickAdd sends. To get a large, dictation-friendly text area, declare the value as multi-line in QuickAdd itself - `{{VALUE:label|type:multiline}}`, or a macro user script whose `quickadd.inputs` entry uses `type: "textarea"`. The extension renders whatever the vault describes; there is no bespoke "big field" command to maintain.
-
-### Links and tags
-
-Typing `[[` in a text field opens a searchable list of the vault's notes and aliases. Typing `#` at the start of a word opens the vault's tags, most used first. Picking one inserts the link or tag where you typed. This needs QuickAdd 2.31 or later.
+`pnpm dev` installs the extension into Raycast and keeps it up to date while it runs.
 
 ## Requirements
 
-| Feature                                                                        | Needs                                                                                                                                    |
-| ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Everything                                                                     | macOS, and Obsidian 1.12 or later (the installer, not only the in-app update) with Settings → General → Command line interface turned on |
-| Quick Capture, Capture Selection, Capture Clipboard                            | QuickAdd 2.15 or later                                                                                                                   |
-| Run QuickAdd Choice, with a choice's inputs on one form                        | QuickAdd 2.17.2 or later                                                                                                                 |
-| Cancel Run stops the run in Obsidian, "Created" and "Added to" finish messages | QuickAdd 2.20 or later                                                                                                                   |
-| Note pickers that start empty                                                  | QuickAdd 2.31 or later                                                                                   |
-| `[[` and `#` completion                                                        | QuickAdd 2.31 or later (`quickadd:suggest`)                                                               |
+| What                                                             | Needs                                                                                                                                             |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Everything                                                       | macOS. Obsidian 1.12 or later from the installer (an in-app update is not enough), with **Settings → General → Command line interface** turned on |
+| Quick Capture, Capture Selection, Capture Clipboard              | QuickAdd 2.15 or later                                                                                                                            |
+| Run QuickAdd Choice, with a choice's inputs on one form          | QuickAdd 2.17.2 or later                                                                                                                          |
+| Cancel Run that stops the run, "Created" and "Added to" messages | QuickAdd 2.20 or later                                                                                                                            |
+| `[[` and `#` completion, note pickers that start empty           | QuickAdd 2.31 or later                                                                                                                            |
 
-The extension starts Obsidian and opens the vault when it is closed.
+## Commands
 
-## Limitations
-
-- Templater's own prompts, such as `tp.system.prompt`, open in Obsidian, not in Raycast. When a run waits on one, Raycast offers **Open Obsidian**.
-- `{{selected}}` inside a choice reads the selection in Obsidian's editor, not the text selected on your Mac. Use **Capture Selection** to capture the Mac selection.
+| Command                 | What it does                                                                                                         |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| **Run QuickAdd Choice** | Lists every runnable choice, grouped by Multi folder, with the five you use most at the top. Runs the one you pick. |
+| **Quick Capture**       | Sends its text argument to the capture choice named in its preferences.                                              |
+| **Capture Selection**   | Sends the text selected in the frontmost app to the capture choice named in its preferences.                         |
+| **Capture Clipboard**   | Sends the clipboard text to the capture choice named in its preferences.                                             |
 
 ## Preferences
 
-- **Vault** - the vault folder QuickAdd runs in. Leave it empty and the extension uses the one vault with QuickAdd enabled, or lists them when several have it. Quick Capture, Capture Selection, and Capture Clipboard need it set when several vaults have QuickAdd.
-- **Obsidian CLI Path** - optional; auto-detected at `/opt/homebrew/bin/obsidian`, `/usr/local/bin/obsidian`, or inside `Obsidian.app`.
-- **Quick Capture → Capture Choice**, **Capture Selection → Capture Choice**, and **Capture Clipboard → Capture Choice** - the capture choice text is sent to. Pick one that works headlessly (a capture whose target file/heading exists, or that creates them).
+| Preference                               | What it does                                                                                                                                        |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Vault**                                | The vault QuickAdd runs in. Leave it empty to use the one vault with QuickAdd enabled. Set it when several vaults have QuickAdd.                    |
+| **Obsidian CLI Path**                    | Leave it empty. The extension finds the CLI at `/opt/homebrew/bin/obsidian`, `/usr/local/bin/obsidian`, or inside `Obsidian.app`.                  |
+| **Capture Choice** (per capture command) | The capture choice that Quick Capture, Capture Selection, or Capture Clipboard sends text to. Pick one whose target note exists or that creates it. |
+
+## Tips
+
+- Give **Quick Capture**, **Capture Selection**, and your pinned Quicklinks hotkeys in Raycast. A pinned Quicklink with an argument then captures from anywhere in two keystrokes and a line of text.
+- A Quicklink with an argument only fills a plain `{{VALUE}}`. Other prompts in the same choice still open in Raycast. A choice without a plain `{{VALUE}}` ignores the text.
+- For a big text area, declare the value as multi-line in QuickAdd: `{{VALUE:Entry|type:multiline}}`, or a macro user script whose `quickadd.inputs` entry has `type: "textarea"`. The form renders what the vault describes.
+- A lightning bolt next to a choice means you added it as a command in QuickAdd. Those are good candidates to pin.
+
+![The Journal form with a multi-line Entry text area holding two paragraphs and a [[Sofia Almeida]] link](media/multiline.png)
+
+## Limitations
+
+- Templater's own prompts, such as `tp.system.prompt`, open in Obsidian. When a run has waited three seconds with no prompt, Raycast says QuickAdd may be asking something in Obsidian and offers **Open Obsidian** (⌘O).
+- `{{selected}}` inside a choice reads the selection in Obsidian's editor, not the text selected on your Mac. Use **Capture Selection** for the Mac selection.
+- Two registered vaults with the same folder name cannot be told apart, because Obsidian's CLI addresses a vault by name. The extension refuses to run in either until one folder is renamed.
+- A prompt type added by a newer QuickAdd shows a screen that names the type and asks you to update the extension.
+
+## How it works
+
+Obsidian ships a command-line interface, and QuickAdd registers handlers on it. The extension shells out to that CLI to list choices and to start a choice, and QuickAdd sends each prompt to Raycast over a local connection instead of opening a modal. Raycast renders the prompt as a native control and sends the answer back, and QuickAdd does the rest inside Obsidian. [ARCHITECTURE.md](ARCHITECTURE.md) has the protocol, the vault lookup, and the reasons behind each choice.
 
 ## Development
 
 ```bash
 pnpm install
-pnpm dev      # ray develop - installs into Raycast in watch mode
+pnpm dev            # ray develop: installs into Raycast in watch mode
+pnpm lint           # ray lint: manifest, code, and store screenshots
+pnpm test           # unit tests for field parsing, completion, and the run state machine
 pnpm build
-pnpm lint
-pnpm test     # unit tests for field parsing and validation
+pnpm e2e:protocol   # drives every e2e choice through the real plugin
 ```
 
-### Check the prompt replies against a real vault
+`e2e-vault/` has one QuickAdd choice per field kind and a macro script that raises every script prompt. Build QuickAdd in `~/Developer/quickadd` (or set `QUICKADD_DIR`), run `scripts/setup-e2e-vault.sh` to copy the plugin in, open the folder in Obsidian once with **Open folder as vault**, and run `pnpm e2e:protocol`. The script runs every choice through `quickadd:interactive`, answers each prompt the way the extension would, and checks the notes QuickAdd writes to `e2e-vault/Output/`.
 
-`e2e-vault/` has one QuickAdd choice per field kind and a macro script that raises every script prompt.
+`demo-vault/` is the vault in the pictures above. `scripts/setup-demo-vault.sh` downloads the QuickAdd release it expects. To open a choice against either vault from a deeplink, URL-encode `{"vaultPath":"<repo>/demo-vault","choiceId":"quick-capture"}` and append it as `?context=` to `raycast://extensions/christian_bager_bach_houmann/quickadd/run-choice`.
 
-1. Build QuickAdd in `~/Developer/quickadd` (set `QUICKADD_DIR` to use another checkout), then run `scripts/setup-e2e-vault.sh` to copy the plugin into `e2e-vault/`.
-2. Open `e2e-vault/` in Obsidian with **Open folder as vault**, and turn on community plugins when Obsidian asks.
-3. Run `pnpm e2e:protocol`. The script runs every choice through `quickadd:interactive`, answers each prompt with replies built by `readField`, and checks the notes QuickAdd writes to `e2e-vault/Output/`. It also aborts a slow macro mid-work and checks that it stops at its next prompt, and checks that `/abort` after a finished run changes nothing.
+## License
 
-To see the forms in Raycast, open a choice through a deeplink whose context names the e2e vault, for example `raycast://extensions/christian_bager_bach_houmann/quickadd/run-choice?context=` followed by the URL-encoded `{"vaultPath":"<repo>/e2e-vault","choiceId":"e2e-text"}`.
-
-See [`ARCHITECTURE.md`](ARCHITECTURE.md) for how the extension talks to QuickAdd and why.
+[MIT](LICENSE)
