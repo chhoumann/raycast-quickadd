@@ -8,7 +8,7 @@
 
 Run your [QuickAdd](https://github.com/chhoumann/quickadd) choices from Raycast. The forms, the pickers, and the finish message are Raycast's. The work is QuickAdd's, running inside Obsidian through Obsidian's command-line interface. Nothing is re-implemented, so every capture, template, and macro you already have works the day you install this.
 
-The extension is written by Christian Bager Bach Houmann, who also writes QuickAdd.
+I write QuickAdd, and this is its official Raycast extension.
 
 ![Picking Quick Capture from the list, typing a note with a [[ link pick and a # tag pick, submitting, and the new line appearing in Obsidian](media/quick-capture.gif)
 
