@@ -44,8 +44,8 @@ Typing `[[` in a text field opens a searchable list of the vault's notes and ali
 | Quick Capture, Capture Selection                                               | QuickAdd 2.15 or later                                                                                                                   |
 | Run QuickAdd Choice, with a choice's inputs on one form                        | QuickAdd 2.17.2 or later                                                                                                                 |
 | Cancel Run stops the run in Obsidian, "Created" and "Added to" finish messages | QuickAdd 2.20 or later                                                                                                                   |
-| Note pickers that start empty                                                  | QuickAdd 2.31 or later (unreleased as of October 2026)                                                                                   |
-| `[[` and `#` completion                                                        | QuickAdd 2.31 or later (`quickadd:suggest`, unreleased as of October 2026)                                                               |
+| Note pickers that start empty                                                  | QuickAdd 2.31 or later                                                                                   |
+| `[[` and `#` completion                                                        | QuickAdd 2.31 or later (`quickadd:suggest`)                                                               |
 
 The extension starts Obsidian and opens the vault when it is closed.
 
