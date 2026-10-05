@@ -37,7 +37,7 @@ The form renders each input from the field metadata QuickAdd sends. To get a lar
 
 ### Links and tags
 
-Typing `[[` in a text field opens a searchable list of the vault's notes and aliases. Typing `#` at the start of a word opens the vault's tags, most used first. Picking one inserts the link or tag where you typed. This needs QuickAdd with `quickadd:suggest`.
+Typing `[[` in a text field opens a searchable list of the vault's notes and aliases. Typing `#` at the start of a word opens the vault's tags, most used first. Picking one inserts the link or tag where you typed. This needs QuickAdd 2.31 or later.
 
 ## Requirements
 

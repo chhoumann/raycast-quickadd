@@ -63,7 +63,7 @@ Polling continues while a prompt is open. The poll is the server's only sign tha
 - A select or multi field with `allowCustomInput` gets a text field for values outside the list. For multi, the text field takes comma-separated values.
 - As in QuickAdd's one-page form, a single-note picker (`picker: "file"`) starts with no note picked, and the form won't submit until a required one has a pick.
 
-Text fields are controlled. When an edit ends in a new `[[`, or types `#` at the start of a word, the field pushes `LinkPicker` or `TagPicker` (`src/completion-pickers.tsx`), which loads its items from `quickadd:suggest`. A pick replaces the trigger with `[[text]]` or `#tag `, and the field takes focus again when the picker closes. The trigger rules are pure functions in `src/lib/completion.ts`.
+Text and number fields are controlled, because Raycast clears an uncontrolled text field when the form re-renders with its error. When an edit to a text field ends in a new `[[`, or types `#` at the start of a word, the field pushes `LinkPicker` or `TagPicker` (`src/completion-pickers.tsx`), which loads its items from `quickadd:suggest`. A pick replaces the trigger with `[[text]]` or `#tag `, and the field takes focus again when the picker closes. The trigger rules are pure functions in `src/lib/completion.ts`.
 
 The suggester, confirm, checkbox, and info prompts keep their own views. A suggester is a searchable list, which suits a single pick from many items.
 
@@ -79,6 +79,6 @@ Form item ids are positional (`field-0`), not field ids, because QuickAdd field 
 
 The `verify` flag that **Run in Obsidian** and the capture commands pass needs **QuickAdd >= 2.14**. Older versions ignore it, and some captures can report success without writing.
 
-`[[` and `#` completion needs **QuickAdd with `quickadd:suggest`**, which is not released yet. Without it, the picker shows the CLI's error.
+`[[` and `#` completion needs **QuickAdd >= 2.31**, which added `quickadd:suggest`. Before it, the picker says which version it needs.
 
 In the one-page form, note pickers start empty only with **QuickAdd >= 2.31**, which marks them with `picker: "file"`. Older versions send them as plain suggesters, so they keep the first note picked.

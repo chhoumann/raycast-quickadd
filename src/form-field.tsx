@@ -39,13 +39,7 @@ export function FieldControl({
     case "text":
       return <TextControl {...common} spec={spec} vault={vault} />;
     case "number":
-      return (
-        <Form.TextField
-          {...common}
-          placeholder={spec.placeholder ?? "Number"}
-          defaultValue={spec.defaultValue}
-        />
-      );
+      return <NumberControl {...common} spec={spec} />;
     case "date":
       return (
         <Form.DatePicker
@@ -115,6 +109,34 @@ export function FieldControl({
         </>
       );
   }
+}
+
+// Controlled: Raycast clears an uncontrolled text field when the form
+// re-renders with its error, so a rejected value would vanish.
+function NumberControl({
+  spec,
+  onChange,
+  ...item
+}: {
+  spec: Extract<FieldSpec, { kind: "number" }>;
+  id: string;
+  title: string;
+  info?: string;
+  error?: string;
+  onChange: () => void;
+}) {
+  const [value, setValue] = useState(spec.defaultValue ?? "");
+  return (
+    <Form.TextField
+      {...item}
+      placeholder={spec.placeholder ?? "Number"}
+      value={value}
+      onChange={(next) => {
+        onChange();
+        setValue(next);
+      }}
+    />
+  );
 }
 
 function TextControl({
