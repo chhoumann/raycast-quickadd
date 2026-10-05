@@ -8,7 +8,7 @@ Obsidian ships a command-line interface (Settings → General → Command line i
 
 - `quickadd:list [type=...] [commands]` - the flattened choice tree: `id`, `name`, `type`, `path` (`Multi / child`), `command`, `runnable` (a Multi is a folder, not runnable).
 - `quickadd:interactive id=<id> [vars=<json>]` - starts a choice and returns at once with the choice (`id`, `name`, `type`) and the address of a local prompt server (`host`, `port`, `sessionId`, `token`). QuickAdd then sends each prompt to that server instead of opening a modal.
-- `quickadd:run choice=<name>|id=<id> [vars=<json>] [ui] [verify]` - runs a choice to completion. **Run in Obsidian** passes `ui` so QuickAdd prompts inside the app. Quick Capture and Capture Selection pass their text through `vars`. `verify` returns the created file path and an honest success or failure for Template and Capture choices.
+- `quickadd:run choice=<name>|id=<id> [vars=<json>] [ui] [verify]` - runs a choice to completion. **Run in Obsidian** passes `ui` so QuickAdd prompts inside the app. Quick Capture, Capture Selection, and Capture Clipboard pass their text through `vars`. `verify` returns the created file path and an honest success or failure for Template and Capture choices.
 - `quickadd:suggest kind=links|tags` - completion items for text fields. `links` returns one item per note, attachment, and alias, each with `text` (what goes inside `[[...]]`) and `path`, plus `alias` on alias items. `tags` returns each tag without its `#` and its `count`, most used first. The CLI does no filtering; Raycast's `List` filters as the user types.
 
 The extension shells out with `execFile` (each argument is a separate argv entry, so no shell quoting is needed for values with spaces or newlines) and parses the JSON envelope.
