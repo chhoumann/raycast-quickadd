@@ -145,11 +145,12 @@ export async function listChoices(vault: Vault): Promise<ListResponse> {
 export async function startInteractive(
   vault: Vault,
   choiceId: string,
+  vars?: Record<string, string>,
 ): Promise<{ session: InteractiveSession; choice: ChoiceRef }> {
   const response = await invoke<InteractiveResponse>(
     vault,
     "quickadd:interactive",
-    { id: choiceId },
+    { id: choiceId, vars: vars && JSON.stringify(vars) },
   );
   const { port, sessionId, token, choice } = response;
   if (!response.ok || !port || !sessionId || !token || !choice) {

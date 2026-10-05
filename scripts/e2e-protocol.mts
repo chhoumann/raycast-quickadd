@@ -75,9 +75,13 @@ function reply(prompt: PromptSpec): unknown {
   }
 }
 
-async function start(choiceId: string) {
+async function start(choiceId: string, vars?: object) {
   const started = JSON.parse(
-    obsidian("quickadd:interactive", `id=${choiceId}`),
+    obsidian(
+      "quickadd:interactive",
+      `id=${choiceId}`,
+      ...(vars ? [`vars=${JSON.stringify(vars)}`] : []),
+    ),
   );
   if (!started.ok) throw new Error(started.error);
   return (path: string) =>
@@ -91,8 +95,8 @@ async function nextEvent(at: (path: string) => string): Promise<SessionEvent> {
   }
 }
 
-async function run(choiceId: string) {
-  const at = await start(choiceId);
+async function run(choiceId: string, vars?: object) {
+  const at = await start(choiceId, vars);
   for (;;) {
     const event = await nextEvent(at);
     if (event.kind === "error") throw new Error(event.error);
@@ -113,8 +117,19 @@ function note(path: string): string {
   return readFileSync(new URL(path, VAULT_DIR), "utf8");
 }
 
-const cases: Array<[id: string, path: string, expected: string[]]> = [
+// What a Quicklink argument carries into the run as `value`.
+const ARGUMENT = `idea & plan #tag [[Note]] "quoted" back\\slash æøå 💡`;
+
+const cases: Array<
+  [id: string, path: string, expected: string[], vars?: object]
+> = [
   ["e2e-text", "Output/Inbox.md", ["- text: Text to capture answer"]],
+  [
+    "e2e-text",
+    "Output/Inbox.md",
+    [`- text: ${ARGUMENT}\n`],
+    { value: ARGUMENT },
+  ],
   ["e2e-select", "Output/Inbox.md", ["- color: green"]],
   ["e2e-multi", "Output/Inbox.md", ["- tags: alpha,gamma"]],
   ["e2e-custom", "Output/Inbox.md", ["- mood: typed"]],
@@ -158,10 +173,10 @@ obsidian(
 await sleep(1500);
 
 let failed = 0;
-for (const [id, path, expected] of cases) {
-  console.log(`${id}`);
+for (const [id, path, expected, vars] of cases) {
+  console.log(vars ? `${id} with vars` : id);
   try {
-    const { result } = await run(id);
+    const { result } = await run(id, vars);
     await sleep(300);
     const content = note(path);
     const missing = expected.filter((text) => !content.includes(text));

@@ -30,6 +30,7 @@ import {
   startInteractive,
 } from "./lib/obsidianCli";
 import { choiceIcon } from "./lib/format";
+import { quicklinkWithArgument } from "./lib/quicklink";
 import { STALL_MS, InteractiveSessionView } from "./interactive-session";
 import {
   type DoneResult,
@@ -51,6 +52,8 @@ interface RunChoiceContext {
   vaultPath?: string;
   /** Set when launched from a pinned Quicklink: open this choice directly. */
   choiceId?: string;
+  /** The Quicklink's argument, run as the choice's `{{VALUE}}`. */
+  value?: string;
   relaunched?: boolean;
 }
 
@@ -129,11 +132,13 @@ function VaultGate({
   vault,
   registry,
   choiceId,
+  value,
   relaunched,
 }: {
   vault: Vault;
   registry: Registry;
   choiceId?: string;
+  value?: string;
   relaunched?: boolean;
 }) {
   const [readiness, setReadiness] = useState<Readiness>();
@@ -152,6 +157,7 @@ function VaultGate({
           runChoiceDeeplink({
             vaultPath: vault.path,
             choiceId,
+            value,
             relaunched: true,
           }),
         );
@@ -177,7 +183,7 @@ function VaultGate({
     );
   }
   return choiceId ? (
-    <DirectChoice vault={vault} choiceId={choiceId} />
+    <DirectChoice vault={vault} choiceId={choiceId} value={value} />
   ) : (
     <ChoiceList vault={vault} />
   );
@@ -261,7 +267,15 @@ function ChoiceList({ vault }: { vault: Vault }) {
  * Opens one choice directly (used when launched from a pinned Quicklink). The
  * session view shows the run from the start and closes the window with a HUD.
  */
-function DirectChoice({ vault, choiceId }: { vault: Vault; choiceId: string }) {
+function DirectChoice({
+  vault,
+  choiceId,
+  value,
+}: {
+  vault: Vault;
+  choiceId: string;
+  value?: string;
+}) {
   const [view, setView] = useState<
     | { phase: "loading" }
     | { phase: "attach"; session: InteractiveSession; choiceName: string }
@@ -273,7 +287,11 @@ function DirectChoice({ vault, choiceId }: { vault: Vault; choiceId: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    startRef.current ??= startInteractive(vault, choiceId);
+    startRef.current ??= startInteractive(
+      vault,
+      choiceId,
+      value === undefined ? undefined : { value },
+    );
     startRef.current.then(
       ({ session, choice }) => {
         if (!cancelled)
@@ -443,6 +461,17 @@ function ChoiceItem({
             title="Pin as Quicklink"
             icon={Icon.Pin}
             quicklink={{ name: choice.name, link: deeplink }}
+          />
+          <Action.CreateQuicklink
+            title="Pin as Quicklink with Argument"
+            icon={Icon.TextInput}
+            quicklink={{
+              name: choice.name,
+              link: quicklinkWithArgument(
+                createDeeplink({ command: "run-choice" }),
+                { vaultPath: vault.path, choiceId: choice.id },
+              ),
+            }}
           />
           <Action.CopyToClipboard
             title="Copy Deeplink"

@@ -28,6 +28,8 @@ Obsidian ships a command-line interface (Settings → General → Command line i
 - **Quick Capture** - a no-view command that sends its text argument to a capture choice of your choosing (set per-command in preferences). Bind it to a hotkey for frictionless capture.
 - **Capture Selection** - a no-view command that sends the text selected in the frontmost app to a capture choice, set per-command like Quick Capture's.
 
+**Pin as Quicklink with Argument** (⌘K) makes a Quicklink that takes text inline in root search: type its name, press Tab, type the text, and press Enter. The text runs as the choice's `{{VALUE}}`, so a pinned capture with a plain `{{VALUE}}` works like Quick Capture for that choice. Any other prompt still opens in Raycast, and a choice without a plain `{{VALUE}}` ignores the text.
+
 ### Multi-line input, driven by the vault
 
 The form renders each input from the field metadata QuickAdd sends. To get a large, dictation-friendly text area, declare the value as multi-line in QuickAdd itself - `{{VALUE:label|type:multiline}}`, or a macro user script whose `quickadd.inputs` entry uses `type: "textarea"`. The extension renders whatever the vault describes; there is no bespoke "big field" command to maintain.
