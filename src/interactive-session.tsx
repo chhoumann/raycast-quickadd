@@ -146,7 +146,7 @@ function emptyTitle(phase: Exclude<SessionState, { state: "prompt" }>): string {
     case "done":
       return "Done";
     case "cancelled":
-      return "Cancelled";
+      return "Canceled";
   }
 }
 
