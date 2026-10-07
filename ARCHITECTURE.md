@@ -83,6 +83,6 @@ The `verify` flag that **Run in Obsidian** and the capture commands pass needs *
 
 `[[` and `#` completion needs **QuickAdd >= 2.31**, which added `quickadd:suggest`. Before it, the picker says which version it needs.
 
-Asking for the current note needs **QuickAdd >= 2.33**, which added `current=` and `currentNote`. Older versions send no `currentNote`, so the extension asks for nothing and the run uses the active tab.
+Asking for the current note needs **QuickAdd >= 2.32**, which added `current=` and `currentNote`. Older versions send no `currentNote`, so the extension asks for nothing and the run uses the active tab.
 
 In the one-page form, note pickers start empty only with **QuickAdd >= 2.31**, which marks them with `picker: "file"`. Older versions send them as plain suggesters, so they keep the first note picked.

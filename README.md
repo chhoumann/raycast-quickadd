@@ -82,7 +82,7 @@ npm run dev
 | Run QuickAdd Choice, with a choice's inputs on one form          | QuickAdd 2.17.2 or later                                                                                                                          |
 | Cancel Run that stops the run, "Created" and "Added to" messages | QuickAdd 2.20 or later                                                                                                                            |
 | `[[` and `#` completion, note pickers that start empty           | QuickAdd 2.31 or later                                                                                                                            |
-| Asking for the current note                                      | QuickAdd 2.33 or later                                                                                                                            |
+| Asking for the current note                                      | QuickAdd 2.32 or later                                                                                                                            |
 
 ## Commands
 
