@@ -54,7 +54,6 @@ interface RunChoiceContext {
   choiceId?: string;
   /** The Quicklink's argument, run as the choice's `{{VALUE}}`. */
   value?: string;
-  current?: CurrentNote;
   relaunched?: boolean;
 }
 
@@ -130,14 +129,12 @@ function VaultGate({
   registry,
   choiceId,
   value,
-  current,
   relaunched,
 }: {
   vault: Vault;
   registry: Registry;
   choiceId?: string;
   value?: string;
-  current?: CurrentNote;
   relaunched?: boolean;
 }) {
   const [readiness, setReadiness] = useState<Readiness>();
@@ -157,7 +154,6 @@ function VaultGate({
             vaultPath: vault.path,
             choiceId,
             value,
-            current,
             relaunched: true,
           }),
         );
@@ -185,12 +181,7 @@ function VaultGate({
   const choice =
     choiceId && readiness.choices.find(({ id }) => id === choiceId);
   return choice ? (
-    <DirectChoice
-      vault={vault}
-      choice={choice}
-      value={value}
-      current={current}
-    />
+    <DirectChoice vault={vault} choice={choice} value={value} />
   ) : (
     <ChoiceList vault={vault} choices={readiness.choices} />
   );
@@ -259,14 +250,12 @@ function DirectChoice({
   vault,
   choice,
   value,
-  current: launchCurrent,
 }: {
   vault: Vault;
   choice: ChoiceSummary;
   value?: string;
-  current?: CurrentNote;
 }) {
-  const [current, setCurrent] = useState(launchCurrent);
+  const [current, setCurrent] = useState<CurrentNote>();
   const asking = asksForCurrentNote(choice) && current === undefined;
   const [view, setView] = useState<
     | { phase: "loading" }
