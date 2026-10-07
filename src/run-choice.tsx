@@ -28,7 +28,11 @@ import {
   startInteractive,
 } from "./lib/obsidianCli";
 import { CurrentNotePicker } from "./completion-pickers";
-import { type CurrentNote, asksForCurrentNote } from "./lib/current-note";
+import {
+  type CurrentNote,
+  asksForCurrentNote,
+  currentFor,
+} from "./lib/current-note";
 import { choiceIcon } from "./lib/format";
 import { quicklinkWithArgument } from "./lib/quicklink";
 import { STALL_MS, InteractiveSessionView } from "./interactive-session";
@@ -271,7 +275,7 @@ function DirectChoice({
     let cancelled = false;
     startRef.current ??= startInteractive(vault, choice.id, {
       vars: value === undefined ? undefined : { value },
-      current,
+      current: currentFor(choice, current),
     });
     startRef.current.then(
       ({ session }) => {
@@ -363,7 +367,7 @@ function ChoiceItem({
     });
     try {
       const { session } = await startInteractive(vault, choice.id, {
-        current,
+        current: currentFor(choice, current),
       });
       const first = await firstEvent(session, STALL_MS);
       if (first.kind === "error") throw new Error(first.error);

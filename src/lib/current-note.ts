@@ -19,6 +19,19 @@ export function noteItems(links: LinkItem[]): LinkItem[] {
   return links.filter((item) => !item.alias && item.path.endsWith(".md"));
 }
 
+/**
+ * What to send as `current=`: the user's pick, else "none" so the run never
+ * reads Obsidian's active tab. QuickAdd before 2.32 sends no `currentNote` and
+ * would take `current` as a variable, so it gets nothing.
+ */
+export function currentFor(
+  choice: UsesCurrentNote,
+  pick?: CurrentNote,
+): CurrentNote | undefined {
+  if (choice.currentNote === undefined) return undefined;
+  return pick ?? "none";
+}
+
 /** The current note for a run with no one to ask, as the capture commands are. */
 export function headlessCurrentNote(
   choice: UsesCurrentNote,
@@ -28,5 +41,5 @@ export function headlessCurrentNote(
       `${choice.name} needs a current note. Run it from Run QuickAdd Choice.`,
     );
   }
-  return choice.currentNote === "optional" ? "none" : undefined;
+  return currentFor(choice);
 }

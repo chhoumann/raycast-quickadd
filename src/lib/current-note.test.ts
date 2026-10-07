@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { headlessCurrentNote, noteItems } from "./current-note";
+import { currentFor, headlessCurrentNote, noteItems } from "./current-note";
 
 describe("noteItems", () => {
   it("keeps each note once and drops aliases and attachments", () => {
@@ -32,10 +32,23 @@ describe("headlessCurrentNote", () => {
     ).toBe("none");
   });
 
-  it("leaves the run alone when the choice does not use the current note", () => {
+  it("sends none when the choice does not use the current note, so the active tab is never read", () => {
     expect(headlessCurrentNote({ name: "Inbox", currentNote: "none" })).toBe(
-      undefined,
+      "none",
     );
+  });
+
+  it("sends nothing to a QuickAdd that does not report currentNote", () => {
     expect(headlessCurrentNote({ name: "Inbox" })).toBe(undefined);
+  });
+});
+
+describe("currentFor", () => {
+  it("passes the pick through and defaults to none", () => {
+    expect(
+      currentFor({ name: "A", currentNote: "required" }, "Notes/X.md"),
+    ).toBe("Notes/X.md");
+    expect(currentFor({ name: "A", currentNote: "none" })).toBe("none");
+    expect(currentFor({ name: "A" })).toBe(undefined);
   });
 });
