@@ -4,7 +4,7 @@ Run your [QuickAdd](https://github.com/chhoumann/quickadd) choices from Raycast.
 
 ![The Run QuickAdd Choice command in Raycast, listing a vault's QuickAdd choices with a Recent section at the top](extension/media/hero.jpg)
 
-Install it from the [Raycast Store](https://www.raycast.com/christian_bager_bach_houmann/quickadd). The [extension's README](extension/README.md) shows what it can do and what it needs.
+It is [under review](https://github.com/raycast/extensions/pull/31967) for the Raycast Store. Until it lands there, run it from source as described below. The [extension's README](extension/README.md) shows what it can do and what it needs.
 
 ## Layout
 
