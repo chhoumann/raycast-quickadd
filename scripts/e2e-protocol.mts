@@ -6,8 +6,8 @@ import {
   fieldSpecFromForm,
   fieldSpecFromPrompt,
   readField,
-} from "../src/lib/fields.ts";
-import type { PromptSpec, SessionEvent } from "../src/lib/interactive.ts";
+} from "../extension/src/lib/fields.ts";
+import type { PromptSpec, SessionEvent } from "../extension/src/lib/interactive.ts";
 
 const VAULT = "e2e-vault";
 const VAULT_DIR = new URL("../e2e-vault/", import.meta.url);
