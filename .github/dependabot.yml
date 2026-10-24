@@ -1,0 +1,45 @@
+version: 2
+# Grouped weekly updates, adapted from chhoumann/obsidian-plugin-workflows
+# templates/dependabot.yml. The cooldown holds back releases younger than 7
+# days, the window in which compromised publishes are usually caught and pulled.
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: ci
+    labels:
+      - dependencies
+      - github-actions
+
+  - package-ecosystem: npm
+    directory: /extension
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    cooldown:
+      default-days: 7
+    # Pinned to the exact peers @raycast/api declares; they move with it.
+    ignore:
+      - dependency-name: "@types/node"
+      - dependency-name: "@types/react"
+    groups:
+      dev-dependencies:
+        dependency-type: development
+        update-types: ["minor", "patch"]
+      prod-dependencies:
+        dependency-type: production
+        update-types: ["minor", "patch"]
+    commit-message:
+      prefix: build
+      include: scope
+    labels:
+      - dependencies
