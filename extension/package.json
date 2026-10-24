@@ -112,6 +112,6 @@
     "lint": "ray lint",
     "fix-lint": "ray lint --fix",
     "test": "vitest run",
-    "publish": "npx @raycast/api@latest publish"
+    "publish": "ray publish"
   }
 }
