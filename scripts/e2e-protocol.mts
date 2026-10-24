@@ -231,8 +231,8 @@ const checks: Array<[name: string, check: () => Promise<void>]> = [
         () => "",
         (error: Error) => error.message,
       );
-      if (!failure.includes("no active file")) {
-        throw new Error(`expected the no-active-file error, got: ${failure}`);
+      if (!failure.includes("current=none")) {
+        throw new Error(`expected the current=none error, got: ${failure}`);
       }
       if (note("Output/Current.md") !== before) {
         throw new Error("Output/Current.md changed");
