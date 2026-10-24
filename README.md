@@ -30,7 +30,7 @@ For the end-to-end run, build QuickAdd in `~/Developer/quickadd` (or set `QUICKA
 node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/e2e-protocol.mts
 ```
 
-It runs every choice through `quickadd:interactive`, answers each prompt the way the extension would, and checks the notes QuickAdd writes to `e2e-vault/Output/`.
+It runs every choice through `quickadd:interactive`, answers each prompt the way the extension would, and checks the notes QuickAdd writes to `e2e-vault/Output/`. QuickAdd keeps a finished run for a minute and allows 32 at once, so wait a minute before running it again.
 
 To open a choice against either vault from a deeplink, URL-encode `{"vaultPath":"<repo>/demo-vault","choiceId":"quick-capture"}` and append it as `?context=` to `raycast://extensions/christian_bager_bach_houmann/quickadd/run-choice`.
 
