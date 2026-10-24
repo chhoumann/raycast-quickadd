@@ -31,6 +31,9 @@ updates:
     ignore:
       - dependency-name: "@types/node"
       - dependency-name: "@types/react"
+      # @raycast/eslint-config peers typescript <6.1.0; lift once it supports 7.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
     groups:
       dev-dependencies:
         dependency-type: development
